@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   run-tests:
-    runs-on: dimos-runner-ubuntu-2204
+    runs-on: dimos-runner-ubuntu-2204-hosted
 
     container:
       image: ghcr.io/dimensionalos/${{ inputs.dev-image }}
