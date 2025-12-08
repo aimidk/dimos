@@ -24,6 +24,10 @@ import open3d as o3d
 from matplotlib.path import Path
 from PIL import Image
 import cv2
+import logging
+from dimos.utils.logging_config import setup_logger
+
+logger = setup_logger("dimos.robot.unitree_webrtc.multiprocess.unitree_go2", level=logging.INFO)
 
 DTYPE2STR = {
     np.float32: "f32",
@@ -457,13 +461,23 @@ def _inflate_lethal(costmap: np.ndarray, radius: int, lethal_val: int = 100) -> 
     return out
 
 
+def generate_normal(elev: np.ndarray, blur_kernel: int = 3) -> np.ndarray:
+    dzdx = -cv2.Sobel(elev, cv2.CV_32F, 1, 0, ksize=blur_kernel)
+    dzdy = -cv2.Sobel(elev, cv2.CV_32F, 0, 1, ksize=blur_kernel)
+    dzdz = np.ones_like(elev)
+    normal = np.stack((dzdx, dzdy, dzdz), axis=2)
+    norm = np.linalg.norm(normal, axis=2, keepdims=True)
+    normal = normal / norm
+    return normal
+
+
 def pointcloud_to_costmap(
     pcd: o3d.geometry.PointCloud,
     *,
     resolution: float = 0.05,
     ground_z: float = 0.0,
     obs_min_height: float = 0.15,
-    max_height: Optional[float] = 0.5,
+    max_height: Optional[float] = 10.0,
     inflate_radius_m: Optional[float] = None,
     default_unknown: int = -1,
     cost_free: int = 0,
@@ -506,20 +520,27 @@ def pointcloud_to_costmap(
     np.maximum.at(z_max, lin, pts[:, 2])
     z_max = z_max.reshape(Ny, Nx)
 
+    # Get me smoothened surface normals from the heightmap:
+    normal = generate_normal(z_max, blur_kernel=3)
+
     # 3. Cost rules -----------------------------------------------------------
     costmap = np.full_like(z_max, default_unknown, np.int8)
     known = z_max != -np.inf
     costmap[known] = cost_free
 
-    lethal = z_max >= (ground_z + obs_min_height)
+    # lethal = z_max >= (ground_z + obs_min_height)
+    lethal = normal[..., 2] < np.cos(np.radians(60))
     costmap[lethal] = cost_lethal
 
     # 4. Optional inflation ----------------------------------------------------
     if inflate_radius_m and inflate_radius_m > 0:
         cells = int(np.ceil(inflate_radius_m / resolution))
         costmap = _inflate_lethal(costmap, cells, lethal_val=cost_lethal)
-
-    return costmap, origin.astype(np.float32)
+    # cv2.imshow("costmap", costmap)
+    # cv2.waitKey(1)
+    return costmap, origin.astype(
+        np.float32
+    )  # , heightmap, normal # TODO: add heightmap and normal
 
 
 if __name__ == "__main__":
