@@ -35,6 +35,7 @@ from dimos.perception.common.utils import colorize_depth
 
 logger = setup_logger(__name__)
 
+
 class UnitreeCameraModule(Module):
     """
     Camera module for Unitree Go2 that processes RGB images to generate depth using Metric3D.
@@ -90,6 +91,7 @@ class UnitreeCameraModule(Module):
 
         # Initialize Metric3D
         from dimos.models.depth.metric3d import Metric3D
+
         self.metric3d = Metric3D(camera_intrinsics=self.camera_intrinsics)
         self.tf = TF()
 
@@ -101,9 +103,9 @@ class UnitreeCameraModule(Module):
 
         # IPC & processor members
         self.backend = self._autodetect_backend()
-        self._source: Optional[SourceActor] = None     # owns the channel
-        self._desc: Optional[dict] = None              # descriptor from source.channel
-        self.slot = None                                # attached reader for MRP
+        self._source: Optional[SourceActor] = None  # owns the channel
+        self._desc: Optional[dict] = None  # descriptor from source.channel
+        self.slot = None  # attached reader for MRP
         self._multirateprocessor: Optional[MultiRateProcessor] = None
 
         # Threading
@@ -117,6 +119,7 @@ class UnitreeCameraModule(Module):
     def _autodetect_backend(self) -> str:
         try:
             import cupy as cp  # noqa
+
             return "cuda" if cp.is_available() else "cpu"
         except Exception:
             return "cpu"
@@ -182,7 +185,7 @@ class UnitreeCameraModule(Module):
         try:
             if self._source is None:
                 # First frame → initialize SourceActor (owner of channel)
-                shape = tuple(msg.data.shape)            # (H, W, C) expected
+                shape = tuple(msg.data.shape)  # (H, W, C) expected
                 prefer = "cuda" if self.backend == "cuda" else "cpu"
                 dtype = msg.data.dtype
 
@@ -209,14 +212,17 @@ class UnitreeCameraModule(Module):
                 )
                 self._multirateprocessor.start()
 
-                logger.info(f"Initialized SourceActor + IPC channel shape={shape} prefer={prefer} dtype={dtype}")
+                logger.info(
+                    f"Initialized SourceActor + IPC channel shape={shape} prefer={prefer} dtype={dtype}"
+                )
 
             # Push this frame into the channel via SourceActor
             start = time.time()
             self._source.publish(msg.data)
             end = time.time()
-            logger.info(f"self.source_publish returned. Time: {end}. Time taken: {end - start:.4f} seconds")
-            
+            logger.info(
+                f"self.source_publish returned. Time: {end}. Time taken: {end - start:.4f} seconds"
+            )
 
             # Keep last image for publishing (color topic)
             self._last_image = msg.data
@@ -227,9 +233,7 @@ class UnitreeCameraModule(Module):
     def _start_processing_thread(self):
         """Start an idle processing thread (keeps module lifecycle/simple shutdown)."""
         self._stop_processing.clear()
-        self._processing_thread = threading.Thread(
-            target=self._main_processing_loop, daemon=True
-        )
+        self._processing_thread = threading.Thread(target=self._main_processing_loop, daemon=True)
         self._processing_thread.start()
         logger.info("Started camera processing thread")
 
@@ -248,11 +252,15 @@ class UnitreeCameraModule(Module):
             depth_array = self.metric3d.infer_depth(img_array) / self.gt_depth_scale
             self._last_depth = depth_array
             end = time.time()
-            logger.info(f"self._last_depth returned. Time: {end}. Time taken: {end - start:.4f} seconds")
+            logger.info(
+                f"self._last_depth returned. Time: {end}. Time taken: {end - start:.4f} seconds"
+            )
             start = time.time()
             self._publish_synchronized_data()
             end = time.time()
-            logger.info(f"publish_synchronized_data called. Time: {end}. Time taken: {end - start:.4f} seconds")
+            logger.info(
+                f"publish_synchronized_data called. Time: {end}. Time taken: {end - start:.4f} seconds"
+            )
         except Exception as e:
             logger.error(f"Error processing depth: {e}", exc_info=True)
 
@@ -276,7 +284,7 @@ class UnitreeCameraModule(Module):
                 )
                 self.color_image.publish(color_msg)
                 color_end = time.perf_counter()
-                logger.info(f"Color publish: {(color_end - publish_start)*1000:.1f}ms")
+                logger.info(f"Color publish: {(color_end - publish_start) * 1000:.1f}ms")
 
             # Publish depth + colorized
             if self._last_depth is not None:
@@ -288,7 +296,7 @@ class UnitreeCameraModule(Module):
                 )
                 self.depth_image.publish(depth_msg)
                 depth_end = time.perf_counter()
-                logger.info(f"Depth publish: {(depth_end - color_end)*1000:.1f}ms")
+                logger.info(f"Depth publish: {(depth_end - color_end) * 1000:.1f}ms")
 
                 depth_colorized_array = colorize_depth(
                     self._last_depth, max_depth=10.0, overlay_stats=True
@@ -302,8 +310,7 @@ class UnitreeCameraModule(Module):
                     )
                     self.depth_colorized.publish(depth_colorized_msg)
                     colorized_end = time.perf_counter()
-                    logger.info(f"Colorized publish: {(colorized_end - depth_end)*1000:.1f}ms")
-
+                    logger.info(f"Colorized publish: {(colorized_end - depth_end) * 1000:.1f}ms")
 
             # Camera info & pose
             self._publish_camera_info(header)
@@ -372,4 +379,3 @@ class UnitreeCameraModule(Module):
         self.stop()
         # Metric3D teardown
         self.metric3d.cleanup()
-

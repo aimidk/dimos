@@ -237,7 +237,7 @@ class UnitreeWebRTCConnection(ConnectionInterface):
         stop_event = threading.Event()
 
         # Timing stats for WebRTC decode
-        decode_stats = {'count': 0, 'total_time': 0.0, 'last_report': time.time()}
+        decode_stats = {"count": 0, "total_time": 0.0, "last_report": time.time()}
 
         async def accept_track(track: MediaStreamTrack) -> VideoMessage:
             while True:
@@ -251,22 +251,23 @@ class UnitreeWebRTCConnection(ConnectionInterface):
                 decode_end = time.perf_counter()
 
                 # Update stats
-                decode_stats['count'] += 1
-                decode_stats['total_time'] += (decode_end - decode_start)
+                decode_stats["count"] += 1
+                decode_stats["total_time"] += decode_end - decode_start
 
                 # Log every 30 frames
-                if decode_stats['count'] % 30 == 0:
+                if decode_stats["count"] % 30 == 0:
                     now = time.time()
-                    if now - decode_stats['last_report'] >= 5.0:
-                        avg_decode = decode_stats['total_time'] / decode_stats['count']
-                        fps = decode_stats['count'] / (now - decode_stats['last_report'])
-                        logger.info(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - WebRTC: FPS={fps:.2f}, Avg decode={avg_decode*1000:.1f}ms\n")
-                        decode_stats['count'] = 0
-                        decode_stats['total_time'] = 0.0
-                        decode_stats['last_report'] = now
+                    if now - decode_stats["last_report"] >= 5.0:
+                        avg_decode = decode_stats["total_time"] / decode_stats["count"]
+                        fps = decode_stats["count"] / (now - decode_stats["last_report"])
+                        logger.info(
+                            f"{time.strftime('%Y-%m-%d %H:%M:%S')} - WebRTC: FPS={fps:.2f}, Avg decode={avg_decode * 1000:.1f}ms\n"
+                        )
+                        decode_stats["count"] = 0
+                        decode_stats["total_time"] = 0.0
+                        decode_stats["last_report"] = now
 
                 subject.on_next(Image.from_numpy(arr))
-
 
         self.conn.video.add_track_callback(accept_track)
 

@@ -23,6 +23,7 @@ import numpy as np
 # Optional CuPy
 try:
     import cupy as cp
+
     HAS_CUDA = True
 except Exception:
     cp = None
@@ -37,43 +38,52 @@ from dimos.types.timestamped import Timestamped
 
 class ImageFormat(Enum):
     """Supported image formats for internal representation."""
-    BGR = "BGR"     # 8-bit Blue-Green-Red color
-    RGB = "RGB"     # 8-bit Red-Green-Blue color
-    RGBA = "RGBA"   # 8-bit RGB with Alpha
-    BGRA = "BGRA"   # 8-bit BGR with Alpha
-    GRAY = "GRAY"   # 8-bit Grayscale
+
+    BGR = "BGR"  # 8-bit Blue-Green-Red color
+    RGB = "RGB"  # 8-bit Red-Green-Blue color
+    RGBA = "RGBA"  # 8-bit RGB with Alpha
+    BGRA = "BGRA"  # 8-bit BGR with Alpha
+    GRAY = "GRAY"  # 8-bit Grayscale
     GRAY16 = "GRAY16"  # 16-bit Grayscale
-    DEPTH = "DEPTH"    # 32-bit Float Depth
+    DEPTH = "DEPTH"  # 32-bit Float Depth
 
 
 # -----------------------
 # CuPy helper primitives
 # -----------------------
 
+
 def _is_cu(x) -> bool:
     return HAS_CUDA and isinstance(x, cp.ndarray)
 
+
 def _ascontig(x):
     if _is_cu(x):
-        return x if x.flags['C_CONTIGUOUS'] else cp.ascontiguousarray(x)
-    return x if x.flags['C_CONTIGUOUS'] else np.ascontiguousarray(x)
+        return x if x.flags["C_CONTIGUOUS"] else cp.ascontiguousarray(x)
+    return x if x.flags["C_CONTIGUOUS"] else np.ascontiguousarray(x)
+
 
 def _to_cpu(x):
     return cp.asnumpy(x) if _is_cu(x) else x
+
 
 def _to_cu(x):
     if HAS_CUDA and isinstance(x, np.ndarray):
         return cp.asarray(x)
     return x
 
+
 # --------------- GPU color ops (CuPy) ---------------
+
 
 def _rgb_to_bgr_gpu(img: cp.ndarray) -> cp.ndarray:
     # HWC
     return img[..., ::-1]
 
+
 def _bgr_to_rgb_gpu(img: cp.ndarray) -> cp.ndarray:
     return img[..., ::-1]
+
 
 def _rgba_to_bgra_gpu(img: cp.ndarray) -> cp.ndarray:
     # RGBA -> BGRA : swap R and B, keep A
@@ -81,14 +91,17 @@ def _rgba_to_bgra_gpu(img: cp.ndarray) -> cp.ndarray:
     out[..., 0], out[..., 2] = img[..., 2], img[..., 0]
     return out
 
+
 def _bgra_to_rgba_gpu(img: cp.ndarray) -> cp.ndarray:
     out = img.copy()
     out[..., 0], out[..., 2] = img[..., 2], img[..., 0]
     return out
 
+
 def _gray_to_rgb_gpu(gray: cp.ndarray) -> cp.ndarray:
     # gray HxW (uint8/uint16/float) -> HxWx3
     return cp.stack([gray, gray, gray], axis=-1)
+
 
 def _rgb_to_gray_gpu(rgb: cp.ndarray) -> cp.ndarray:
     # ITU-R BT.601 luma transform: Y = 0.299 R + 0.587 G + 0.114 B
@@ -101,7 +114,9 @@ def _rgb_to_gray_gpu(rgb: cp.ndarray) -> cp.ndarray:
         y = cp.clip(y, 0, 255).astype(cp.uint8)
     return y
 
+
 # --------------- GPU resize (CuPy bilinear) ---------------
+
 
 def _resize_bilinear_hwc_gpu(img: cp.ndarray, out_h: int, out_w: int) -> cp.ndarray:
     """Bilinear resize for HWC images (C=1,3,4) using CuPy; dtype preserved if uint8 else float32."""
@@ -149,9 +164,11 @@ def _resize_bilinear_hwc_gpu(img: cp.ndarray, out_h: int, out_w: int) -> cp.ndar
         out = cp.clip(out, 0, 255).astype(cp.uint8)
     return out
 
+
 # -----------------------
 # Image class (GPU-aware)
 # -----------------------
+
 
 @dataclass
 class Image(Timestamped):
@@ -239,7 +256,9 @@ class Image(Timestamped):
         return cls(data=np_image, format=format, **kwargs)
 
     @classmethod
-    def from_file(cls, filepath: str, format: ImageFormat = ImageFormat.BGR, to_gpu: bool = False) -> "Image":
+    def from_file(
+        cls, filepath: str, format: ImageFormat = ImageFormat.BGR, to_gpu: bool = False
+    ) -> "Image":
         """Load image from file (CPU), optionally move to GPU."""
         cv_image = cv2.imread(filepath, cv2.IMREAD_UNCHANGED)
         if cv_image is None:
@@ -247,7 +266,9 @@ class Image(Timestamped):
 
         # Detect format based on channels and dtype
         if cv_image.ndim == 2:
-            detected_format = ImageFormat.GRAY16 if cv_image.dtype == np.uint16 else ImageFormat.GRAY
+            detected_format = (
+                ImageFormat.GRAY16 if cv_image.dtype == np.uint16 else ImageFormat.GRAY
+            )
         elif cv_image.shape[2] == 3:
             detected_format = ImageFormat.BGR
         elif cv_image.shape[2] == 4:
@@ -323,22 +344,30 @@ class Image(Timestamped):
                 rgb = _bgr_to_rgb_gpu(self.data)
             else:
                 rgb = cv2.cvtColor(self.data, cv2.COLOR_BGR2RGB)
-            return self.__class__(data=rgb, format=ImageFormat.RGB, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=rgb, format=ImageFormat.RGB, frame_id=self.frame_id, ts=self.ts
+            )
         if self.format == ImageFormat.RGBA:
             return self.copy()  # RGBA already has RGB order + alpha
         if self.format == ImageFormat.BGRA:
             if self.is_cuda:
                 rgba = _bgra_to_rgba_gpu(self.data)
-                return self.__class__(data=rgba, format=ImageFormat.RGBA, frame_id=self.frame_id, ts=self.ts)
+                return self.__class__(
+                    data=rgba, format=ImageFormat.RGBA, frame_id=self.frame_id, ts=self.ts
+                )
             else:
                 rgba = cv2.cvtColor(self.data, cv2.COLOR_BGRA2RGBA)
-                return self.__class__(data=rgba, format=ImageFormat.RGBA, frame_id=self.frame_id, ts=self.ts)
+                return self.__class__(
+                    data=rgba, format=ImageFormat.RGBA, frame_id=self.frame_id, ts=self.ts
+                )
         if self.format == ImageFormat.GRAY:
             if self.is_cuda:
                 rgb = _gray_to_rgb_gpu(self.data)
             else:
                 rgb = cv2.cvtColor(self.data, cv2.COLOR_GRAY2RGB)
-            return self.__class__(data=rgb, format=ImageFormat.RGB, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=rgb, format=ImageFormat.RGB, frame_id=self.frame_id, ts=self.ts
+            )
         if self.format == ImageFormat.GRAY16:
             # Convert 16-bit grayscale to 8-bit then RGB for display-like consistency
             if self.is_cuda:
@@ -347,7 +376,9 @@ class Image(Timestamped):
             else:
                 gray8 = (self.data / 256).astype(np.uint8)
                 rgb = cv2.cvtColor(gray8, cv2.COLOR_GRAY2RGB)
-            return self.__class__(data=rgb, format=ImageFormat.RGB, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=rgb, format=ImageFormat.RGB, frame_id=self.frame_id, ts=self.ts
+            )
         raise ValueError(f"Unsupported conversion from {self.format} to RGB")
 
     def to_bgr(self) -> "Image":
@@ -358,26 +389,34 @@ class Image(Timestamped):
                 bgr = _rgb_to_bgr_gpu(self.data)
             else:
                 bgr = cv2.cvtColor(self.data, cv2.COLOR_RGB2BGR)
-            return self.__class__(data=bgr, format=ImageFormat.BGR, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=bgr, format=ImageFormat.BGR, frame_id=self.frame_id, ts=self.ts
+            )
         if self.format == ImageFormat.RGBA:
             if self.is_cuda:
                 bgr = _rgba_to_bgra_gpu(self.data)[..., :3]  # RGBA->BGRA then drop A
             else:
                 bgr = cv2.cvtColor(self.data, cv2.COLOR_RGBA2BGR)
-            return self.__class__(data=bgr, format=ImageFormat.BGR, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=bgr, format=ImageFormat.BGR, frame_id=self.frame_id, ts=self.ts
+            )
         if self.format == ImageFormat.BGRA:
             if self.is_cuda:
                 bgr = self.data[..., :3]
             else:
                 bgr = cv2.cvtColor(self.data, cv2.COLOR_BGRA2BGR)
-            return self.__class__(data=bgr, format=ImageFormat.BGR, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=bgr, format=ImageFormat.BGR, frame_id=self.frame_id, ts=self.ts
+            )
         if self.format == ImageFormat.GRAY:
             if self.is_cuda:
                 bgr = _gray_to_rgb_gpu(self.data)  # 3-ch
                 bgr = _rgb_to_bgr_gpu(bgr)
             else:
                 bgr = cv2.cvtColor(self.data, cv2.COLOR_GRAY2BGR)
-            return self.__class__(data=bgr, format=ImageFormat.BGR, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=bgr, format=ImageFormat.BGR, frame_id=self.frame_id, ts=self.ts
+            )
         if self.format == ImageFormat.GRAY16:
             if self.is_cuda:
                 gray8 = (self.data.astype(cp.float32) / 256.0).clip(0, 255).astype(cp.uint8)
@@ -385,7 +424,9 @@ class Image(Timestamped):
             else:
                 gray8 = (self.data / 256).astype(np.uint8)
                 bgr = cv2.cvtColor(gray8, cv2.COLOR_GRAY2BGR)
-            return self.__class__(data=bgr, format=ImageFormat.BGR, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=bgr, format=ImageFormat.BGR, frame_id=self.frame_id, ts=self.ts
+            )
         if self.format == ImageFormat.DEPTH:
             return self.copy()  # no change for depth
         raise ValueError(f"Unsupported conversion from {self.format} to BGR")
@@ -398,22 +439,34 @@ class Image(Timestamped):
                 gray = _rgb_to_gray_gpu(_bgr_to_rgb_gpu(self.data))
             else:
                 gray = cv2.cvtColor(self.data, cv2.COLOR_BGR2GRAY)
-            return self.__class__(data=gray, format=ImageFormat.GRAY, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=gray, format=ImageFormat.GRAY, frame_id=self.frame_id, ts=self.ts
+            )
         if self.format == ImageFormat.RGB:
             if self.is_cuda:
                 gray = _rgb_to_gray_gpu(self.data)
             else:
                 gray = cv2.cvtColor(self.data, cv2.COLOR_RGB2GRAY)
-            return self.__class__(data=gray, format=ImageFormat.GRAY, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=gray, format=ImageFormat.GRAY, frame_id=self.frame_id, ts=self.ts
+            )
         if self.format in (ImageFormat.RGBA, ImageFormat.BGRA):
             # drop alpha, then convert
             if self.is_cuda:
-                rgb = self.data[..., :3] if self.format == ImageFormat.RGBA else _bgra_to_rgba_gpu(self.data)[..., :3]
+                rgb = (
+                    self.data[..., :3]
+                    if self.format == ImageFormat.RGBA
+                    else _bgra_to_rgba_gpu(self.data)[..., :3]
+                )
                 gray = _rgb_to_gray_gpu(rgb)
             else:
-                code = cv2.COLOR_RGBA2GRAY if self.format == ImageFormat.RGBA else cv2.COLOR_BGRA2GRAY
+                code = (
+                    cv2.COLOR_RGBA2GRAY if self.format == ImageFormat.RGBA else cv2.COLOR_BGRA2GRAY
+                )
                 gray = cv2.cvtColor(self.data, code)
-            return self.__class__(data=gray, format=ImageFormat.GRAY, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=gray, format=ImageFormat.GRAY, frame_id=self.frame_id, ts=self.ts
+            )
         raise ValueError(f"Unsupported conversion from {self.format} to GRAY")
 
     # ------------- Geometric ops -------------
@@ -422,10 +475,14 @@ class Image(Timestamped):
         """Resize the image; GPU bilinear if on device, else cv2."""
         if self.is_cuda:
             resized = _resize_bilinear_hwc_gpu(self.data, height, width)
-            return self.__class__(data=resized, format=self.format, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=resized, format=self.format, frame_id=self.frame_id, ts=self.ts
+            )
         else:
             resized = cv2.resize(self.data, (width, height), interpolation=interpolation)
-            return self.__class__(data=resized, format=self.format, frame_id=self.frame_id, ts=self.ts)
+            return self.__class__(
+                data=resized, format=self.format, frame_id=self.frame_id, ts=self.ts
+            )
 
     def crop(self, x: int, y: int, width: int, height: int) -> "Image":
         x = max(0, min(x, self.width))
@@ -503,6 +560,7 @@ class Image(Timestamped):
             raise ValueError("Failed to encode image as JPEG")
 
         import base64
+
         return base64.b64encode(buffer.tobytes()).decode("utf-8")
 
     # ------------- Encoding helpers -------------
@@ -536,23 +594,21 @@ class Image(Timestamped):
             elif dt == np.float64 or (_is_cu(self.data) and dt == cp.float64):
                 return "64FC1"
 
-        raise ValueError(
-            f"Cannot determine LCM encoding for format={self.format}, dtype={dt}"
-        )
+        raise ValueError(f"Cannot determine LCM encoding for format={self.format}, dtype={dt}")
 
     @staticmethod
     def _parse_encoding(encoding: str) -> dict:
         """Parse LCM image encoding string to determine format and data type."""
         encoding_map = {
-            "mono8":  {"format": ImageFormat.GRAY,  "dtype": np.uint8,   "channels": 1},
-            "mono16": {"format": ImageFormat.GRAY16,"dtype": np.uint16,  "channels": 1},
-            "rgb8":   {"format": ImageFormat.RGB,   "dtype": np.uint8,   "channels": 3},
-            "rgba8":  {"format": ImageFormat.RGBA,  "dtype": np.uint8,   "channels": 4},
-            "bgr8":   {"format": ImageFormat.BGR,   "dtype": np.uint8,   "channels": 3},
-            "bgra8":  {"format": ImageFormat.BGRA,  "dtype": np.uint8,   "channels": 4},
-            "32FC1":  {"format": ImageFormat.DEPTH, "dtype": np.float32, "channels": 1},
-            "32FC3":  {"format": ImageFormat.RGB,   "dtype": np.float32, "channels": 3},
-            "64FC1":  {"format": ImageFormat.DEPTH, "dtype": np.float64, "channels": 1},
+            "mono8": {"format": ImageFormat.GRAY, "dtype": np.uint8, "channels": 1},
+            "mono16": {"format": ImageFormat.GRAY16, "dtype": np.uint16, "channels": 1},
+            "rgb8": {"format": ImageFormat.RGB, "dtype": np.uint8, "channels": 3},
+            "rgba8": {"format": ImageFormat.RGBA, "dtype": np.uint8, "channels": 4},
+            "bgr8": {"format": ImageFormat.BGR, "dtype": np.uint8, "channels": 3},
+            "bgra8": {"format": ImageFormat.BGRA, "dtype": np.uint8, "channels": 4},
+            "32FC1": {"format": ImageFormat.DEPTH, "dtype": np.float32, "channels": 1},
+            "32FC3": {"format": ImageFormat.RGB, "dtype": np.float32, "channels": 3},
+            "64FC1": {"format": ImageFormat.DEPTH, "dtype": np.float64, "channels": 1},
         }
         if encoding not in encoding_map:
             raise ValueError(f"Unsupported encoding: {encoding}")
@@ -581,4 +637,3 @@ class Image(Timestamped):
 
     def __len__(self) -> int:
         return int(self.height * self.width)
-
