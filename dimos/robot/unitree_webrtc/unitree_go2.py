@@ -589,12 +589,12 @@ class UnitreeGo2(UnitreeRobot, Resource):
         )
 
         # Deploy Detection2DModule for continuous person detection
-        self.detection_module = self.dimos.deploy(
+        self.detection_module = self._dimos.deploy(
             Detection2DModule, camera_info=ConnectionModule._camera_info(), max_freq=5
         )
 
         # Deploy PersonTracker for person following
-        self.person_tracker = self.dimos.deploy(
+        self.person_tracker = self._dimos.deploy(
             PersonTracker,
             cameraInfo=ConnectionModule._camera_info(),
         )
@@ -647,12 +647,12 @@ class UnitreeGo2(UnitreeRobot, Resource):
 
         # Connect detection module inputs
         if self.detection_module:
-            self.detection_module.image.connect(self.connection.video)
+            self.detection_module.image.connect(self.connection.color_image)
             logger.info("Detection module connected to camera")
 
         # Connect person tracker inputs
         if self.person_tracker:
-            self.person_tracker.image.connect(self.connection.video)
+            self.person_tracker.image.connect(self.connection.color_image)
             self.person_tracker.detections.connect(self.detection_module.detections)
             self.person_tracker.target.connect(self.local_planner.path)
             logger.info("Person tracker connected to detection module and local planner")

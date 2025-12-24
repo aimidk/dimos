@@ -49,7 +49,7 @@ class HolonomicLocalPlanner(BaseLocalPlanner):
         k_rep: float = 0.5,
         k_angular: float = 2.5,
         alpha: float = 0.5,
-        v_max: float = 2.0,
+        v_max: float = 1.0,
         goal_tolerance: float = 0.5,
         orientation_tolerance: float = 0.2,
         control_frequency: float = 10.0,

@@ -47,6 +47,7 @@ class PersonTracker(Module):
         self.tf = TF()
         self._sub = None
         self._is_tracking = False
+        self._continuous = True
         self._arrival_threshold = arrival_threshold  # bbox bottom must be in bottom 30% of frame
 
     def center_to_3d(
@@ -118,12 +119,18 @@ class PersonTracker(Module):
         return is_arrived
 
     @skill()
-    def start_tracking(self):
-        """Start person tracking."""
+    def start_tracking(self, continuous: bool = True):
+        """Start person tracking.
+
+        Args:
+            continuous: If True, follow continuously without checking arrival.
+                       If False, stop when person is reached (default: True)
+        """
         if not self._is_tracking:
+            self._continuous = continuous
             self._sub = self.detections_stream().subscribe(self.track)
             self._is_tracking = True
-            logger.info("PersonTracker: Tracking started")
+            logger.info(f"PersonTracker: Tracking started (continuous={continuous})")
         return "Person tracking started"
 
     @skill()
@@ -132,6 +139,11 @@ class PersonTracker(Module):
         if self._sub:
             self._sub.dispose()
             self._is_tracking = False
+
+            # Publish empty path to clear local planner
+            empty_path = Path(poses=[])
+            self.target.publish(empty_path)
+
             logger.info("PersonTracker: Tracking stopped")
         return "Person tracking stopped"
 
@@ -159,13 +171,12 @@ class PersonTracker(Module):
             f"bbox_volume={target.bbox_2d_volume():.1f}px"
         )
 
-        # Check if arrived at person
-        if self.check_arrival(target):
+        if not self._continuous and self.check_arrival(target):
             logger.info("Person reached, stopping tracker")
             self.stop_tracking()
             return
 
-        vector = self.center_to_3d(target.center_bbox, self.camera_info, 3.0)
+        vector = self.center_to_3d(target.center_bbox, self.camera_info, 1.0)
         logger.info(
             f"PersonTracker: 3D position in camera_link: x={vector.x:.3f}, y={vector.y:.3f}, z={vector.z:.3f}"
         )

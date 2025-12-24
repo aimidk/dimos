@@ -33,7 +33,7 @@ PERCEPTION & TEMPORAL AWARENESS:
 NAVIGATION & MOVEMENT:
 - You can navigate to semantically described locations using `navigate_with_text` (e.g., "go to the kitchen")
 - You can navigate to visually identified objects using `navigate_with_text` (e.g., "go to the red chair")
-- You can follow humans through complex environments using `follow_human`
+- You can follow humans through complex environments using `follow_person`
 - You can perform various body movements and gestures (sit, stand, dance, etc.)
 - You can stop any navigation process that is currently running using `stop_movement`
 - If you are told to go to a location use `navigate_with_text()`

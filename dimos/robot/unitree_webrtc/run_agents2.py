@@ -56,6 +56,8 @@ class UnitreeAgents2Runner(Resource):
             connection_type=os.getenv("CONNECTION_TYPE", "webrtc"),
         )
 
+        self._robot.start()
+
         time.sleep(3)
 
         logger.info("Robot initialized successfully")
@@ -84,7 +86,7 @@ class UnitreeAgents2Runner(Resource):
         self._agent = Agent(system_prompt=SYSTEM_PROMPT)
         self._navigation_skill = NavigationSkillContainer(
             robot=self._robot,
-            video_stream=self._robot.connection.video,
+            video_stream=self._robot.connection.color_image,
         )
         self._navigation_skill.start()
 
@@ -92,7 +94,6 @@ class UnitreeAgents2Runner(Resource):
             UnitreeSkillContainer(robot=self._robot),
             self._navigation_skill,
             HumanInput(),
-            PersonTracker(cameraInfo=ConnectionModule._camera_info()),
         ]
 
         for container in skill_containers:
