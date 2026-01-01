@@ -373,7 +373,6 @@ class Reducer:
     With `Stream.passive`, values accumulate silently until an active skill wakes
     the agent. With `Stream.call_agent`, whether updates accumulate depends on
     whether yields happen faster than the agent processes them.
-    ```
 
     Custom reducers can be created with `make_reducer()`.
 
