@@ -89,6 +89,7 @@ nav:
     - api/index.md
     - Agents: api/agents.md
     - Skills: api/skills.md
+    - CLI Tools: api/cli_tools.md
 
 plugins:
   - search
