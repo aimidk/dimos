@@ -38,7 +38,6 @@ if TYPE_CHECKING:
 
 # Encode occupancy grid as image, with helper methods
 class OccupancyGridImage:
-
     def __init__(
         self,
         image: Image,
