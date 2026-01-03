@@ -18,7 +18,6 @@ from enum import IntEnum
 import time
 from typing import TYPE_CHECKING, BinaryIO
 
-import cv2
 from dimos_lcm.nav_msgs import (  # type: ignore[import-untyped]
     MapMetaData,
     OccupancyGrid as LCMOccupancyGrid,
@@ -27,7 +26,7 @@ from dimos_lcm.std_msgs import Time as LCMTime  # type: ignore[import-untyped]
 import numpy as np
 from scipy import ndimage  # type: ignore[import-untyped]
 
-from dimos.msgs.geometry_msgs import Pose, Quaternion, Vector3, VectorLike
+from dimos.msgs.geometry_msgs import Pose, Vector3, VectorLike
 from dimos.msgs.sensor_msgs import Image
 from dimos.msgs.sensor_msgs.image_impls.AbstractImage import (
     ImageFormat,
@@ -41,7 +40,6 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from dimos.msgs.sensor_msgs import PointCloud2
-from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
@@ -82,7 +80,6 @@ class OccupancyGrid(Timestamped):
         height: int | None = None,
         resolution: float = 0.05,
         origin: Pose | None = None,
-        robot_pose: Pose | None = None,
         frame_id: str = "world",
         ts: float = 0.0,
     ) -> None:

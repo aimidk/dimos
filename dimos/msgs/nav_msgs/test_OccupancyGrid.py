@@ -20,10 +20,8 @@ import pickle
 import numpy as np
 import pytest
 
-from dimos.msgs.geometry_msgs import Pose, Quaternion, Vector3
+from dimos.msgs.geometry_msgs import Pose
 from dimos.msgs.nav_msgs import OccupancyGrid
-from dimos.msgs.nav_msgs.OccupancyGrid import CostValues
-from dimos.msgs.nav_msgs.OccupancyGridImage import OccupancyGridImage
 from dimos.msgs.sensor_msgs import PointCloud2
 from dimos.protocol.pubsub.lcmpubsub import LCM, Topic
 from dimos.utils.testing import get_data

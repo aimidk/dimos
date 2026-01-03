@@ -19,7 +19,6 @@ from reactivex.scheduler import ThreadPoolScheduler
 
 from dimos.agents2.skills.google_maps_skill_container import GoogleMapsSkillContainer
 from dimos.agents2.skills.gps_nav_skill import GpsNavSkillContainer
-from dimos.agents2.skills.interpret_map import InterpretMapSkill
 from dimos.agents2.skills.navigation import NavigationSkillContainer
 from dimos.agents2.system_prompt import get_system_prompt
 from dimos.robot.unitree_webrtc.unitree_skill_container import UnitreeSkillContainer

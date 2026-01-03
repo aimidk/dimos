@@ -50,7 +50,6 @@ class Map(Module):
         self.global_publish_interval = global_publish_interval
         self.min_height = min_height
         self.max_height = max_height
-        self.robot_pose = None
 
         if global_config:
             if global_config.simulation:
