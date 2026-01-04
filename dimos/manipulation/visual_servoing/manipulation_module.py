@@ -117,7 +117,7 @@ class ManipulationModule(Module):
 
     def __init__(  # type: ignore[no-untyped-def]
         self,
-        arm: str,
+        arm: str = "piper",
         ee_to_camera_6dof: list | None = None,  # type: ignore[type-arg]
         **kwargs,
     ) -> None:
@@ -370,11 +370,18 @@ class ManipulationModule(Module):
                 ee_pose = self.arm.get_ee_pose()
                 ee_transform = pose_to_matrix(ee_pose)
                 camera_transform = compose_transforms(ee_transform, self.T_ee_to_camera)
-
-                points_3d_world = transform_points_3d(
-                    points_3d_camera,
-                    camera_transform,
-                )
+                if self.arm_type == "so101":
+                    points_3d_world = transform_points_3d(
+                        points_3d_camera,
+                        camera_transform,
+                        to_robot=False,
+                    )
+                else:
+                    points_3d_world = transform_points_3d(
+                        points_3d_camera,
+                        camera_transform,
+                        to_robot=True,
+                    )
 
                 place_position = np.mean(points_3d_world, axis=0)
                 self.place_target_position = place_position
@@ -857,7 +864,7 @@ class ManipulationModule(Module):
         camera_transform = compose_transforms(ee_transform, self.T_ee_to_camera)
         camera_pose = matrix_to_pose(camera_transform)
         detection_3d_array, detection_2d_array = self.detector.process_frame(
-            self.latest_rgb, self.latest_depth, camera_transform
+            self.latest_rgb, self.latest_depth, camera_transform, self.arm_type
         )
 
         return self.latest_rgb, detection_3d_array, detection_2d_array, camera_pose

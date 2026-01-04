@@ -102,7 +102,7 @@ class SO101ArmRobot(Robot):
         self.camera.start()
         self.manipulation_interface.start()
 
-        await asyncio.sleep(2)  # Allow initialization
+        await asyncio.sleep(2)
         logger.info("SO101ArmRobot initialized and started")
 
     def pick_and_place(
@@ -158,7 +158,7 @@ class SO101ArmRobot(Robot):
 
         logger.info("SO101ArmRobot stopped")
 
-        # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Required abstract methods from Robot base class
     # ------------------------------------------------------------------
 
@@ -176,7 +176,6 @@ async def run_so101_arm() -> None:
     robot = SO101ArmRobot()
     await robot.start()
 
-    # Keep the robot running
     try:
         while True:
             await asyncio.sleep(1)

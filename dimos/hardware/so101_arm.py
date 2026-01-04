@@ -34,7 +34,7 @@ logger = setup_logger(__file__)
 
 
 class SO101Arm:
-    def __init__(self, arm_name: str = "arm", port: str = "/dev/ttyACM0") -> None:
+    def __init__(self, arm_name: str = "so101", port: str = "/dev/ttyACM0") -> None:
         self.arm_name = arm_name
         self.arm = SO101Interface(port=port)
 
@@ -83,7 +83,6 @@ class SO101Arm:
         # observe_angles = np.radians(np.array([-0.96703297, -0.96703296, -1.93406593, 76.65934066, -3.95604396], dtype=float))
         observe_angles = np.array([-0.062909,-1.396263,0.208672,1.793661,-1.614142], dtype=float)
         self.arm.move_joint_ptp(observe_angles, duration=duration)
-        print("ee pose: ", self.get_ee_pose())
         self.release_gripper()
         time.sleep(1.0)
         self.close_gripper()
@@ -94,7 +93,6 @@ class SO101Arm:
 
         q_rest = np.array([-0.03989324, -1.81284089, 1.69085964, 1.28578981, -0.00613742], dtype=float)
         self.arm.move_joint_ptp(q_rest, duration=duration)
-        print("ee pose: ", self.get_ee_pose())
         self.release_gripper()
         time.sleep(1.0)
         self.close_gripper()
@@ -138,7 +136,7 @@ class SO101Arm:
 
     def release_gripper(self) -> None:
         """Open gripper to ~max opening."""
-        self.cmd_gripper_ctrl(0.04) # 0.1
+        self.cmd_gripper_ctrl(0.1)
 
     def get_gripper_feedback(self) -> tuple[float, float]:
         """
@@ -161,26 +159,27 @@ class SO101Arm:
 
         """
         self._last_gripper_effort_cmd = commanded_effort
+        self.cmd_gripper_ctrl(0.0, effort=commanded_effort)
 
-        pos, _ = self.get_gripper_feedback()
-        target_closed = 0.0
+        # pos, _ = self.get_gripper_feedback()
+        # target_closed = 0.0
 
-        # Don’t overshoot completely if we’re already almost closed
-        start = max(target_closed, min(0.04, pos))
-        steps = 10
-        backoff = 0.002
-        threshold = 0.6
-        for i in range(steps):
-            alpha = (i + 1) / steps
-            cmd_pos = start + (target_closed - start) * alpha
-            self.cmd_gripper_ctrl(cmd_pos, effort=commanded_effort)
-            time.sleep(0.05)
+        # # Don’t overshoot completely if we’re already almost closed
+        # start = max(target_closed, min(0.04, pos))
+        # steps = 10
+        # backoff = 0.002
+        # threshold = 0.6
+        # for i in range(steps):
+        #     alpha = (i + 1) / steps
+        #     cmd_pos = start + (target_closed - start) * alpha
+        #     self.cmd_gripper_ctrl(cmd_pos, effort=commanded_effort)
+        #     time.sleep(0.05)
 
-            _p, actual_effort = self.get_gripper_feedback()
-            if actual_effort >= threshold:
-                # Contact detected – relieve a tiny bit of pressure
-                self.cmd_gripper_ctrl(cmd_pos + backoff, effort=commanded_effort)
-                break
+        #     _p, actual_effort = self.get_gripper_feedback()
+        #     if actual_effort >= threshold:
+        #         # Contact detected – relieve a tiny bit of pressure
+        #         self.cmd_gripper_ctrl(cmd_pos + backoff, effort=commanded_effort)
+        #         break
 
     def gripper_object_detected(self, commanded_effort: float | None = None) -> bool:
         """
@@ -331,22 +330,4 @@ def run_velocity_controller() -> None:
 
 if __name__ == "__main__":
     arm = SO101Arm()
-
-    def get_key(timeout: float = 0.1):
-        """Non-blocking key reader for arrow keys."""
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(fd)
-            rlist, _, _ = select.select([sys.stdin], [], [], timeout)
-            if rlist:
-                return sys.stdin.read(1)
-            return None
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-    def teleop_linear_vel(arm: SO101Arm) -> None:
-        """Very simple keyboard teleop stub – fill in as you like."""
-        print("Teleop not implemented yet (use get_key and arm.cmd_vel).")
-
     run_velocity_controller()

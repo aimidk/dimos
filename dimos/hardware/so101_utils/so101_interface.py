@@ -82,11 +82,10 @@ class SO101Interface:
 
         # Initialize kinematics
         try:
-            # Specify arm joint names explicitly (exclude gripper)
             self.kinematics = LerobotKinematics(
                 self.urdf_path, 
                 self.ee_link_name,
-                joint_names=self.motor_names,  # Only the 5 arm joints
+                joint_names=self.motor_names,
             )
             logger.info(
                 "Initialized LerobotKinematics with URDF %s, EE link %s",
@@ -409,7 +408,6 @@ class SO101Interface:
             q_sol_kin_deg = self.kinematics.ik(current_q_kin_deg, interp_pos, interp_quat_wxyz)
             q_sol = np.radians(q_sol_kin_deg)
             self.set_joint_angles(q_sol)
-            current_q = q_sol
             current_q_kin_deg = q_sol_kin_deg  # Update for next iteration
 
             time.sleep(dt)
@@ -425,9 +423,8 @@ class SO101Interface:
             raise RuntimeError("Kinematics not initialized.")
 
         # LerobotKinematics uses degrees
-        q = self.get_joint_angles()  # returns radians
-        q_deg = np.degrees(q)
-        pos, quat_wxyz = self.kinematics.fk(q_deg)
+        q = self.get_joint_angles(degree=True)
+        pos, quat_wxyz = self.kinematics.fk(q)
 
         position = Vector3(pos[0], pos[1], pos[2])
         orientation = Quaternion(

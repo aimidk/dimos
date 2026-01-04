@@ -95,6 +95,7 @@ class Detection3DProcessor:
         rgb_image: np.ndarray,  # type: ignore[type-arg]
         depth_image: np.ndarray,  # type: ignore[type-arg]
         transform: np.ndarray | None = None,  # type: ignore[type-arg]
+        arm_type: str = "piper",
     ) -> tuple[Detection3DArray, Detection2DArray]:
         """
         Process a single RGB-D frame to extract 3D object detections.
@@ -174,30 +175,15 @@ class Detection3DProcessor:
                 obj_cam_orientation = pose.get(
                     "rotation", np.array([0.0, 0.0, 0.0])
                 )  # Default to no rotation
-                transformed_pose = transform_pose(
-                    obj_cam_pos, obj_cam_orientation, transform, to_robot=False
-                )
+                if arm_type == "so101":
+                    transformed_pose = transform_pose(
+                        obj_cam_pos, obj_cam_orientation, transform, to_robot=False
+                    )
+                else:
+                    transformed_pose = transform_pose(
+                        obj_cam_pos, obj_cam_orientation, transform, to_robot=True
+                    )
                 center_pose = transformed_pose
-
-
-                # # For point transformation, use direct matrix multiplication (same as test_sam_webcam_detection.py)
-                # # Convert point to homogeneous coordinates
-                # point_3d_camera_homogeneous = np.append(obj_cam_pos, 1.0)
-                # # Transform using matrix multiplication
-                # point_3d_base_homogeneous = transform @ point_3d_camera_homogeneous
-                # obj_base_pos = point_3d_base_homogeneous[:3]
-                
-                # # Get orientation as euler angles, default to no rotation if not available
-                # obj_cam_orientation = pose.get(
-                #     "rotation", np.array([0.0, 0.0, 0.0])
-                # )  # Default to no rotation
-                
-                # # For orientation, we still need to transform it properly if needed
-                # # For now, use identity orientation (can be improved later if needed)
-                # center_pose = Pose(
-                #     position=Vector3(obj_base_pos[0], obj_base_pos[1], obj_base_pos[2]),
-                #     orientation=Quaternion(0.0, 0.0, 0.0, 1.0),  # Default orientation
-                # )
             else:
                 # If no transform, use camera coordinates
                 center_pose = Pose(
