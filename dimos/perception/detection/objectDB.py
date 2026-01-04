@@ -15,12 +15,14 @@
 from __future__ import annotations
 
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from dimos.core import Module, rpc
-from dimos.msgs.geometry_msgs import Vector3
-from dimos.perception.detection.type.detection3d.object import Object
 from dimos.utils.logging_config import setup_logger
+
+if TYPE_CHECKING:
+    from dimos.msgs.geometry_msgs import Vector3
+    from dimos.perception.detection.type.detection3d.object import Object
 
 logger = setup_logger()
 
@@ -104,7 +106,8 @@ class ObjectDB(Module):
         """
         with self._lock:
             candidates = [
-                obj for obj in self._objects.values()
+                obj
+                for obj in self._objects.values()
                 if obj.center is not None and (name is None or obj.name == name)
             ]
 
@@ -172,9 +175,7 @@ class ObjectDB(Module):
                 if obj.track_id >= 0:
                     self._track_id_map[obj.track_id] = obj.object_id
 
-                logger.info(
-                    f"Created new pending object {obj.object_id} ({obj.name})"
-                )
+                logger.info(f"Created new pending object {obj.object_id} ({obj.name})")
                 return obj
 
     def _find_matching_object(self, obj: Object) -> Object | None:
@@ -220,8 +221,10 @@ class ObjectDB(Module):
         # Combine all objects and filter by name and valid center
         all_objects = list(self._objects.values()) + list(self._pending_objects.values())
         candidates = [
-            o for o in all_objects
-            if o.name == obj.name and o.center is not None
+            o
+            for o in all_objects
+            if o.name == obj.name
+            and o.center is not None
             and obj.center.distance(o.center) < self._distance_threshold
         ]
 
@@ -259,10 +262,7 @@ class ObjectDB(Module):
 
     def __repr__(self) -> str:
         with self._lock:
-            return (
-                f"ObjectDB(permanent={len(self._objects)}, "
-                f"pending={len(self._pending_objects)})"
-            )
+            return f"ObjectDB(permanent={len(self._objects)}, pending={len(self._pending_objects)})"
 
 
 # Module blueprint for deployment

@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import time
-import uuid
 from typing import TYPE_CHECKING, Any
+import uuid
 
 import cv2
 from dimos_lcm.geometry_msgs import Pose
@@ -25,7 +25,7 @@ from dimos_lcm.vision_msgs import ObjectHypothesis, ObjectHypothesisWithPose
 import numpy as np
 import open3d as o3d
 
-from dimos.msgs.geometry_msgs import PoseStamped, Quaternion, Vector3, Transform
+from dimos.msgs.geometry_msgs import PoseStamped, Quaternion, Transform, Vector3
 from dimos.msgs.sensor_msgs import Image, PointCloud2
 from dimos.msgs.std_msgs import Header
 from dimos.msgs.vision_msgs import Detection3D as ROSDetection3D, Detection3DArray

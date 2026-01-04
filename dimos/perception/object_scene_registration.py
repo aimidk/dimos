@@ -22,7 +22,6 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.wait_for_message import wait_for_message
-import tf2_ros
 from sensor_msgs.msg import (
     CameraInfo as ROSCameraInfo,
     CompressedImage as ROSCompressedImage,
@@ -30,6 +29,7 @@ from sensor_msgs.msg import (
     PointCloud2 as ROSPointCloud2,
 )
 from std_msgs.msg import Header as ROSHeader
+import tf2_ros
 from vision_msgs.msg import (
     Detection2DArray as ROSDetection2DArray,
     Detection3DArray as ROSDetection3DArray,
@@ -331,7 +331,6 @@ class ObjectSceneRegistrationModule(Module):
             return
 
         # Look up transform from camera frame to target frame (e.g., map)
-        camera_transform: Transform | None = None
         if self._tf_buffer is not None:
             try:
                 ros_transform = self._tf_buffer.lookup_transform(
@@ -340,7 +339,7 @@ class ObjectSceneRegistrationModule(Module):
                     rclpy.time.Time(),
                     timeout=rclpy.duration.Duration(seconds=0.1),
                 )
-                camera_transform = Transform.from_ros_transform_stamped(ros_transform)
+                Transform.from_ros_transform_stamped(ros_transform)
             except (
                 tf2_ros.LookupException,
                 tf2_ros.ConnectivityException,
@@ -353,7 +352,7 @@ class ObjectSceneRegistrationModule(Module):
             color_image=color_image,
             depth_image=depth_image,
             camera_info=self._camera_info,
-            #camera_transform=camera_transform,
+            # camera_transform=camera_transform,
         )
 
         if not objects:
