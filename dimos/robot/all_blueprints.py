@@ -43,6 +43,7 @@ all_blueprints = {
     "demo-remapping": "dimos.robot.unitree_webrtc.demo_remapping:remapping",
     "demo-remapping-transport": "dimos.robot.unitree_webrtc.demo_remapping:remapping_and_transport",
     "demo-error-on-name-conflicts": "dimos.robot.unitree_webrtc.demo_error_on_name_conflicts:blueprint",
+    "demo-rerun-robot-viz": "dimos.visualization.demo_rerun_robot_viz:demo_rerun_robot_viz",
 }
 
 

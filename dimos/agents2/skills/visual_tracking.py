@@ -14,7 +14,7 @@
 
 import threading
 
-from cv_bridge import CvBridge
+# cv_bridge removed for numpy 2.x compatibility
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage as ROSCompressedImage, Image as ROSImage
@@ -45,12 +45,10 @@ class VisualTrackingSkillContainer(SkillModule):
     _tracking_status: bool | None = None
     _spin_thread: threading.Thread | None = None
     _running: bool = False
-    _bridge: CvBridge | None = None
 
     def __init__(self) -> None:
         super().__init__()
         self._moondream = MoondreamHostedVlModel()
-        self._bridge = CvBridge()
 
     @rpc
     def start(self) -> None:
@@ -88,7 +86,11 @@ class VisualTrackingSkillContainer(SkillModule):
         super().stop()
 
     def _on_compressed_image(self, msg: ROSCompressedImage) -> None:
-        cv_image = self._bridge.compressed_imgmsg_to_cv2(msg, "rgb8")
+        import cv2
+        import numpy as np
+        compressed_data = np.frombuffer(msg.data, dtype=np.uint8)
+        bgr_image = cv2.imdecode(compressed_data, cv2.IMREAD_COLOR)
+        cv_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
         self._latest_image = Image.from_numpy(cv_image)
 
     def _on_tracking_status(self, msg: ROSBool) -> None:

@@ -17,7 +17,6 @@ from queue import Empty, Queue
 import re
 import threading
 
-from cv_bridge import CvBridge
 import message_filters
 import numpy as np
 import rclpy
@@ -39,6 +38,7 @@ from vision_msgs.msg import (
 from visualization_msgs.msg import Marker, MarkerArray
 
 from dimos.core import Module, rpc
+from dimos.dashboard.module import RerunConnection
 from dimos.msgs.geometry_msgs import Quaternion, Transform, Vector3
 from dimos.msgs.sensor_msgs import CameraInfo, Image
 from dimos.perception.detection.detectors.yoloe import Yoloe2DDetector, YoloePromptMode
@@ -63,7 +63,6 @@ class ObjectSceneRegistrationModule(Module):
 
     _detector: Yoloe2DDetector | None = None
     _node: Node | None = None
-    _bridge: CvBridge | None = None
     _spin_thread: threading.Thread | None = None
     _processing_thread: threading.Thread | None = None
     _processing_queue: Queue | None = None
@@ -131,7 +130,6 @@ class ObjectSceneRegistrationModule(Module):
         self._object_db_require_same_name_for_dedup = object_db_require_same_name_for_dedup
         self._mesh_store_dir = mesh_store_dir
         self._mesh_marker_topic = mesh_marker_topic
-        self._bridge = CvBridge()
 
         # Track latest data for interactive queries
         self._latest_lock = threading.RLock()
@@ -143,6 +141,26 @@ class ObjectSceneRegistrationModule(Module):
         # Async mesh generation
         self._mesh_request_queue = Queue()
         self._mesh_request_states = {}
+
+        # Rerun (additive, non-breaking): auto-noop if Dashboard isn't running.
+        self._rr_local = threading.local()
+        self._rerun_mesh_logged: set[str] = set()
+        self._rerun_mesh_logged_lock = threading.Lock()
+
+    def _rr(self) -> RerunConnection:
+        """Get a thread-local RerunConnection (one per callback/worker thread)."""
+        rc = getattr(self._rr_local, "rc", None)
+        if rc is None:
+            rc = RerunConnection()
+            self._rr_local.rc = rc
+        return rc
+
+    def _rr_log(self, entity_path: str, value, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        try:
+            self._rr().log(entity_path, value, **kwargs)
+        except Exception:
+            # Never break the perception pipeline for visualization.
+            logger.debug("Rerun logging failed (ignored)", exc_info=True)
 
     @rpc
     def start(self) -> None:
@@ -389,6 +407,19 @@ class ObjectSceneRegistrationModule(Module):
                                     float(T_map_object.rotation.z),
                                     float(T_map_object.rotation.w),
                                 )
+
+                            # Rerun: log mesh geometry + frozen pose once per object.
+                            if obj.mesh_path:
+                                with self._rerun_mesh_logged_lock:
+                                    should_log = obj.object_id not in self._rerun_mesh_logged
+                                    if should_log:
+                                        self._rerun_mesh_logged.add(obj.object_id)
+
+                                if should_log:
+                                    try:
+                                        self._log_mesh_to_rerun(obj)
+                                    except Exception:
+                                        logger.debug("Failed to log mesh to Rerun (ignored)", exc_info=True)
                 self._mesh_request_states[object_id] = "DONE"
                 logger.info(f"Mesh complete for object_id={object_id}")
 
@@ -575,9 +606,6 @@ class ObjectSceneRegistrationModule(Module):
 
     def _convert_compressed_depth_image(self, msg: ROSCompressedImage) -> Image | None:
         """Convert ROS compressedDepth image to internal Image type."""
-        if not self._bridge:
-            return None
-
         try:
             import cv2
 
@@ -599,8 +627,9 @@ class ObjectSceneRegistrationModule(Module):
                     logger.warning("Failed to decode compressedDepth PNG data")
                     return None
             else:
-                # Regular compressed image
-                depth_cv = self._bridge.compressed_imgmsg_to_cv2(msg)
+                # Regular compressed image - decode directly with cv2
+                compressed_data = np.frombuffer(msg.data, dtype=np.uint8)
+                depth_cv = cv2.imdecode(compressed_data, cv2.IMREAD_UNCHANGED)
 
             # Convert to meters if uint16 (assuming mm depth)
             if depth_cv.dtype == np.uint16:
@@ -619,6 +648,10 @@ class ObjectSceneRegistrationModule(Module):
         self, color_msg: ROSCompressedImage, depth_msg: ROSCompressedImage
     ) -> None:
         """Queue synchronized images for processing (fast callback)."""
+        logger.debug(
+            f"Received synced images: color ts={color_msg.header.stamp.sec}.{color_msg.header.stamp.nanosec}, "
+            f"depth ts={depth_msg.header.stamp.sec}.{depth_msg.header.stamp.nanosec}"
+        )
         if not self._processing_queue:
             return
 
@@ -633,21 +666,60 @@ class ObjectSceneRegistrationModule(Module):
 
     def _process_images(self, color_msg: ROSCompressedImage, depth_msg: ROSCompressedImage) -> None:
         """Process synchronized color and depth images (runs in background thread)."""
-        if not self._detector or not self._bridge or not self._camera_info:
+        logger.debug("Processing images started")
+        if not self._detector or not self._camera_info:
+            logger.warning("Early return: detector or camera_info missing")
             return
 
-        # Convert color image
-        cv_image = self._bridge.compressed_imgmsg_to_cv2(color_msg, "rgb8")
+        # Convert color image - decode JPEG directly with cv2
+        import cv2
+        compressed_data = np.frombuffer(color_msg.data, dtype=np.uint8)
+        bgr_image = cv2.imdecode(compressed_data, cv2.IMREAD_COLOR)
+        
+        if bgr_image is None:
+            logger.error("Failed to decode color image - got None from cv2.imdecode")
+            return
+        
+        logger.debug(f"Decoded color image: shape={bgr_image.shape}")
+        cv_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
         color_image = Image.from_numpy(cv_image)
         color_image.from_ros_header(color_msg.header)
+
+        # Rerun: log RGB image (mirror what RViz users see).
+        self._rr_log("/world/camera/rgb", color_image.to_rerun())
 
         # Convert compressed depth image
         depth_image = self._convert_compressed_depth_image(depth_msg)
         if depth_image is None:
+            logger.warning("Depth conversion returned None - skipping frame")
             return
 
+        logger.debug("Running YOLO-E detection...")
         # Run 2D detection
         detections_2d: ImageDetections2D = self._detector.process_image(color_image)
+        logger.debug(f"YOLO-E detected {len(detections_2d.detections)} objects")
+
+        # Rerun: log 2D boxes (non-breaking, best-effort).
+        try:
+            import rerun as rr  # type: ignore[import-not-found]
+
+            mins = []
+            sizes = []
+            labels = []
+            for det in detections_2d.detections:
+                x1, y1, x2, y2 = det.bbox
+                mins.append([float(x1), float(y1)])
+                sizes.append([float(x2 - x1), float(y2 - y1)])
+                name = str(getattr(det, "name", "object"))
+                conf = float(getattr(det, "confidence", 0.0))
+                labels.append(f"{name} {conf:.2f}")
+            if mins:
+                self._rr_log(
+                    "/world/camera/rgb/detections2d",
+                    rr.Boxes2D(mins=mins, sizes=sizes, labels=labels),
+                )
+        except Exception:
+            logger.debug("Failed to log 2D detections to Rerun (ignored)", exc_info=True)
 
         # Store latest data for interactive queries
         with self._latest_lock:
@@ -660,9 +732,18 @@ class ObjectSceneRegistrationModule(Module):
 
         # Publish overlay image
         overlay_image = detections_2d.overlay()
-        overlay_msg = self._bridge.cv2_to_imgmsg(overlay_image.to_opencv(), encoding="rgb8")
+        overlay_np = overlay_image.to_opencv()
+        overlay_msg = ROSImage()
+        overlay_msg.height = overlay_np.shape[0]
+        overlay_msg.width = overlay_np.shape[1]
+        overlay_msg.encoding = "rgb8"
+        overlay_msg.step = overlay_np.shape[1] * 3
+        overlay_msg.data = overlay_np.tobytes()
         overlay_msg.header = color_msg.header
         self._overlay_pub.publish(overlay_msg)
+
+        # Rerun: log overlay image.
+        self._rr_log("/world/camera/overlay", overlay_image.to_rerun())
 
         # Process 3D detections
         self._process_3d_detections(detections_2d, color_image, depth_image, color_msg.header)
@@ -750,6 +831,42 @@ class ObjectSceneRegistrationModule(Module):
         if aggregated_pc is not None:
             ros_pc = aggregated_pc.to_ros_msg()
             self._pointcloud_pub.publish(ros_pc)
+            # Rerun: mirror aggregated object pointcloud.
+            try:
+                self._rr_log("/world/perception/object_pointcloud", aggregated_pc.to_rerun())
+            except Exception:
+                logger.debug("Failed to log object pointcloud to Rerun (ignored)", exc_info=True)
+
+        # Rerun: log 3D boxes for current objects (best-effort).
+        try:
+            import rerun as rr  # type: ignore[import-not-found]
+
+            half_sizes = []
+            translations = []
+            labels = []
+            colors = []
+            rots = []
+            for obj in objects:
+                if obj.center is None or obj.size is None:
+                    continue
+                c = obj.center
+                s = obj.size
+                translations.append([float(c.x), float(c.y), float(c.z)])
+                half_sizes.append([float(s.x) * 0.5, float(s.y) * 0.5, float(s.z) * 0.5])
+                labels.append(obj.scene_entity_label())
+                colors.append([0, 255, 0, 120])
+                rots.append(np.eye(3, dtype=np.float32))
+            if half_sizes:
+                self._rr_log(
+                    "/world/perception/detections3d",
+                    rr.Boxes3D(half_sizes=half_sizes, labels=labels, colors=colors),
+                )
+                self._rr_log(
+                    "/world/perception/detections3d",
+                    rr.InstancePoses3D(translations=translations, mat3x3=np.stack(rots, axis=0)),
+                )
+        except Exception:
+            logger.debug("Failed to log 3D detections to Rerun (ignored)", exc_info=True)
 
         # Publish mesh markers for RViz (permanent objects with mesh_path)
         if self._mesh_markers_pub is not None and self._object_db is not None:
@@ -813,8 +930,71 @@ class ObjectSceneRegistrationModule(Module):
             m.color.b = 0.0
             m.color.a = 0.0  # Alpha 0 = don't tint
             marker_array.markers.append(m)
+            
+            # Rerun: log mesh with vertex colors (once per mesh, static).
+            # This mirrors RViz visualization but with proper color rendering.
+            with self._rerun_mesh_logged_lock:
+                if obj.object_id not in self._rerun_mesh_logged:
+                    self._rerun_mesh_logged.add(obj.object_id)
+                    try:
+                        self._log_mesh_to_rerun(obj)
+                    except Exception:
+                        logger.debug(f"Failed to log mesh {obj.object_id} to Rerun (ignored)", exc_info=True)
 
         self._mesh_markers_pub.publish(marker_array)
+    
+    def _log_mesh_to_rerun(self, obj: Object) -> None:
+        """Log a mesh with vertex colors to Rerun (ARKit Scenes pattern)."""
+        import rerun as rr  # type: ignore[import-not-found]
+        import trimesh  # type: ignore[import-untyped]
+        
+        if not obj.mesh_path or not Path(obj.mesh_path).exists():
+            return
+        
+        # Load mesh (trimesh handles OBJ with vertex colors)
+        mesh = trimesh.load(obj.mesh_path)
+        
+        # Extract vertex colors (Rerun native support!)
+        try:
+            vertex_colors = mesh.visual.to_color().vertex_colors
+        except Exception:
+            vertex_colors = None
+        
+        # Prepare pose
+        if obj.fp_world_position is not None and obj.fp_world_orientation is not None:
+            translation = list(obj.fp_world_position)
+            # Convert quaternion to rotation matrix
+            from scipy.spatial.transform import Rotation as R
+            quat_xyzw = list(obj.fp_world_orientation)  # already in xyzw order
+            rot_matrix = R.from_quat(quat_xyzw).as_matrix()
+        elif obj.center is not None:
+            translation = [float(obj.center.x), float(obj.center.y), float(obj.center.z)]
+            rot_matrix = np.eye(3, dtype=np.float32)
+        else:
+            return
+        
+        # Log mesh geometry + pose (ARKit Scenes pattern)
+        entity_path = f"/world/perception/objects/{obj.object_id}"
+        self._rr_log(
+            entity_path,
+            rr.Mesh3D(
+                vertex_positions=mesh.vertices,
+                triangle_indices=mesh.faces,
+                vertex_colors=vertex_colors,  # Native Rerun support!
+                vertex_normals=mesh.vertex_normals if hasattr(mesh, 'vertex_normals') else None,
+            ),
+            static=True,
+        )
+        self._rr_log(
+            entity_path,
+            rr.InstancePoses3D(
+                translations=[translation],
+                mat3x3=rot_matrix,
+            ),
+            static=True,
+        )
+        
+        logger.debug(f"[Rerun] Logged mesh for {obj.object_id} with vertex colors")
 
 
 object_scene_registration_module = ObjectSceneRegistrationModule.blueprint
