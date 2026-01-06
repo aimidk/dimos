@@ -417,12 +417,17 @@ class ObjectSceneRegistrationModule(Module):
 
                                 if should_log:
                                     try:
-                                        logger.info(f"[Rerun] Attempting to log mesh for {obj.object_id}")
+                                        logger.info(
+                                            f"[Rerun] Attempting to log mesh for {obj.object_id}"
+                                        )
                                         self._log_mesh_to_rerun(obj)
-                                        logger.info(f"[Rerun] Successfully logged mesh for {obj.object_id}")
+                                        logger.info(
+                                            f"[Rerun] Successfully logged mesh for {obj.object_id}"
+                                        )
                                     except Exception as e:
                                         logger.error(
-                                            f"Failed to log mesh {obj.object_id} to Rerun: {e}", exc_info=True
+                                            f"Failed to log mesh {obj.object_id} to Rerun: {e}",
+                                            exc_info=True,
                                         )
                 self._mesh_request_states[object_id] = "DONE"
                 logger.info(f"Mesh complete for object_id={object_id}")
@@ -975,12 +980,14 @@ class ObjectSceneRegistrationModule(Module):
         import rerun as rr  # type: ignore[import-not-found]
         import trimesh  # type: ignore[import-untyped]
 
-        logger.info(f"[Rerun] _log_mesh_to_rerun called for {obj.object_id}, mesh_path={obj.mesh_path}")
+        logger.info(
+            f"[Rerun] _log_mesh_to_rerun called for {obj.object_id}, mesh_path={obj.mesh_path}"
+        )
 
         if not obj.mesh_path:
             logger.warning(f"[Rerun] No mesh_path for {obj.object_id}")
             return
-        
+
         if not Path(obj.mesh_path).exists():
             logger.warning(f"[Rerun] Mesh file does not exist: {obj.mesh_path}")
             return
@@ -993,7 +1000,9 @@ class ObjectSceneRegistrationModule(Module):
         # Extract vertex colors (Rerun native support!)
         try:
             vertex_colors = mesh.visual.to_color().vertex_colors
-            logger.info(f"[Rerun] Extracted vertex colors: shape={vertex_colors.shape if vertex_colors is not None else None}")
+            logger.info(
+                f"[Rerun] Extracted vertex colors: shape={vertex_colors.shape if vertex_colors is not None else None}"
+            )
         except Exception as e:
             logger.warning(f"[Rerun] Failed to extract vertex colors: {e}")
             vertex_colors = None
@@ -1018,7 +1027,7 @@ class ObjectSceneRegistrationModule(Module):
         # Log mesh geometry + pose (ARKit Scenes pattern)
         entity_path = f"/world/perception/objects/{obj.object_id}"
         logger.info(f"[Rerun] Logging to entity path: {entity_path}")
-        
+
         self._rr_log(
             entity_path,
             rr.Mesh3D(
@@ -1030,7 +1039,7 @@ class ObjectSceneRegistrationModule(Module):
             static=True,
         )
         logger.info(f"[Rerun] Logged Mesh3D for {obj.object_id}")
-        
+
         self._rr_log(
             entity_path,
             rr.InstancePoses3D(
@@ -1041,7 +1050,9 @@ class ObjectSceneRegistrationModule(Module):
         )
         logger.info(f"[Rerun] Logged InstancePoses3D for {obj.object_id}")
 
-        logger.info(f"[Rerun] ✓ Successfully logged complete mesh for {obj.object_id} with vertex colors")
+        logger.info(
+            f"[Rerun] ✓ Successfully logged complete mesh for {obj.object_id} with vertex colors"
+        )
 
 
 object_scene_registration_module = ObjectSceneRegistrationModule.blueprint

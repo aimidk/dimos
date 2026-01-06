@@ -458,10 +458,7 @@ class RosRerunBridgeNode(Node):
                 self.rc.stream.set_time("frame", sequence=self._frame_count)
                 self.rc.log(
                     "world/robot/base",
-                    rr.Transform3D(
-                        translation=[p.x, p.y, p.z],
-                        mat3x3=rot_matrix
-                    )
+                    rr.Transform3D(translation=[p.x, p.y, p.z], mat3x3=rot_matrix),
                 )
 
                 # Log forward direction arrow (yellow)
