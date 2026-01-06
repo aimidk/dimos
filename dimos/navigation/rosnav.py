@@ -24,6 +24,7 @@ import logging
 import threading
 import time
 
+from cv_bridge import CvBridge
 from geometry_msgs.msg import (  # type: ignore[attr-defined, import-untyped]
     PointStamped as ROSPointStamped,
     PoseStamped as ROSPoseStamped,
@@ -34,7 +35,6 @@ import rclpy  # type: ignore[import-untyped]
 from rclpy.node import Node  # type: ignore[import-untyped]
 from reactivex import operators as ops
 from reactivex.subject import Subject
-from cv_bridge import CvBridge
 from sensor_msgs.msg import (  # type: ignore[attr-defined, import-untyped]
     CompressedImage as ROSCompressedImage,
     Joy as ROSJoy,
@@ -155,7 +155,10 @@ class ROSNav(
         # Image subscription for spatial memory and navigation skills
         self._bridge = CvBridge()
         self.image_sub = self._node.create_subscription(
-            ROSCompressedImage, "/camera/color/image_raw/compressed", self._on_ros_compressed_image, 10
+            ROSCompressedImage,
+            "/camera/color/image_raw/compressed",
+            self._on_ros_compressed_image,
+            10,
         )
 
         logger.info("NavigationModule initialized with ROS2 node")
