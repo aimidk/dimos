@@ -43,6 +43,7 @@ _project_directory: Path | None = None
 _already_called_apt_get_update = False
 _already_called_brew_update = False
 
+
 def get_system_deps(feature: str | None):
     apt_deps: set[str] = set()
     nix_deps: set[str] = set()
