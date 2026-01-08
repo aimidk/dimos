@@ -17,7 +17,7 @@
 Uses Claude to generate a mapping (dep_db) from a pip package name to system-dependencies for that package
 
 !IMPORTANT Notes!
-- The answers do not need to be perfect, they just make the user-install more smooth the more accurate they are
+- The answers do not need to be perfect, they just make the user-install more smooth
 - The answers are validated to make sure those package names actually exist
 - Once the values have been calculated they are cached (claude is only needed for new pip dependencies)
 - The output can be hand-edited without claude overwriting the edits
