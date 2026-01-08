@@ -50,5 +50,3 @@ def timed(
         return cast("F", wrapper)
 
     return timed_decorator
-
-

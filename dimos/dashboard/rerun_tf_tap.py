@@ -1,4 +1,4 @@
-# Copyright 2025 Dimensional Inc.
+# Copyright 2025-2026 Dimensional Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,10 +20,14 @@ Installed on worker processes via `Module.install_tf_tap(...)`.
 from __future__ import annotations
 
 import importlib
-from typing import Callable
+from typing import TYPE_CHECKING
 
 from dimos.dashboard.rerun_init import connect_rerun
-from dimos.msgs.tf2_msgs import TFMessage
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from dimos.msgs.tf2_msgs import TFMessage
 
 
 def make_rerun_tf_tap(
@@ -65,7 +69,9 @@ def make_rerun_tf_tap(
                 child,
                 rr.Transform3D(
                     translation=[t.translation.x, t.translation.y, t.translation.z],
-                    rotation=rr.Quaternion(xyzw=[t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w]),
+                    rotation=rr.Quaternion(
+                        xyzw=[t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w]
+                    ),
                     parent_frame=parent,
                     child_frame=child,
                 ),
@@ -73,5 +79,3 @@ def make_rerun_tf_tap(
             )
 
     return _cb
-
-

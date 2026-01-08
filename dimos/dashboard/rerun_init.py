@@ -1,3 +1,17 @@
+# Copyright 2026 Dimensional Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Rerun initialization helpers (dashboard-owned).
 
 Design:
@@ -10,11 +24,13 @@ from __future__ import annotations
 import atexit
 import importlib
 import threading
+from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
-from typing import Literal
 
-from dimos.core.global_config import GlobalConfig
 from dimos.utils.logging_config import setup_logger
+
+if TYPE_CHECKING:
+    from dimos.core.global_config import GlobalConfig
 
 logger = setup_logger()
 
@@ -66,9 +82,7 @@ def init_rerun_server(viewer_mode: str = "rerun-web", recording_id: str | None =
             logger.info("Rerun: spawned native viewer", port=RERUN_GRPC_PORT)
         elif viewer_mode == "rerun-web":
             server_uri = rr.serve_grpc(grpc_port=RERUN_GRPC_PORT)
-            rr.serve_web_viewer(
-                web_port=RERUN_WEB_PORT, open_browser=False, connect_to=server_uri
-            )
+            rr.serve_web_viewer(web_port=RERUN_WEB_PORT, open_browser=False, connect_to=server_uri)
             logger.info(
                 "Rerun: web viewer started",
                 web_port=RERUN_WEB_PORT,
@@ -118,5 +132,3 @@ def shutdown_rerun() -> None:
             pass
         _server_started = False
         _connected = False
-
-

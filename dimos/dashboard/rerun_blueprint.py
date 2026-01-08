@@ -1,4 +1,4 @@
-# Copyright 2025 Dimensional Inc.
+# Copyright 2025-2026 Dimensional Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,10 @@ layout that points at different paths and shows empty panels.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 
 def _pick_primary_image_paths(entity_paths: Iterable[str]) -> list[str]:
@@ -113,5 +116,3 @@ def send_default_blueprint(
         metrics_by_module=metrics_by_module,
     )
     rr.send_blueprint(bp)
-
-

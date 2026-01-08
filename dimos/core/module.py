@@ -28,8 +28,7 @@ from typing import (
 )
 
 from dask.distributed import Actor, get_worker
-from reactivex.disposable import CompositeDisposable
-from reactivex.disposable import Disposable
+from reactivex.disposable import CompositeDisposable, Disposable
 from typing_extensions import TypeVar
 
 from dimos.core import colors
@@ -375,7 +374,9 @@ class DaskModule(ModuleBase[ModuleConfigT]):
         return True
 
     @rpc
-    def install_out_tap(self, out_name: str, factory: str, config: dict[str, Any] | None = None) -> bool:
+    def install_out_tap(
+        self, out_name: str, factory: str, config: dict[str, Any] | None = None
+    ) -> bool:
         """Install a best-effort Out.tap callback on this module.
 
         This is intentionally generic and does not reference any visualization system.
@@ -427,7 +428,9 @@ class DaskModule(ModuleBase[ModuleConfigT]):
         if tf is None:
             raise ValueError(f"TF is not available on {self.__class__.__name__}")
         if not hasattr(tf, "tap"):
-            raise ValueError(f"TF implementation on {self.__class__.__name__} does not support tap()")
+            raise ValueError(
+                f"TF implementation on {self.__class__.__name__} does not support tap()"
+            )
 
         if ":" not in factory:
             raise ValueError('factory must be in the form "some.module:factory_fn"')

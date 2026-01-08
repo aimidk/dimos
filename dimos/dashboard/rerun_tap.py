@@ -1,3 +1,17 @@
+# Copyright 2026 Dimensional Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Rerun tap factory (dashboard-owned).
 
 This module defines a picklable import path entrypoint for installing Out.tap callbacks
@@ -8,10 +22,12 @@ from __future__ import annotations
 
 import importlib
 import time
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from dimos.dashboard.rerun_init import connect_rerun
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Module-global caches shared across all Out taps within a single worker process.
 # This is important because `camera_info` and `color_image` are separate `Out.tap` callbacks.
@@ -34,7 +50,7 @@ def make_rerun_tap(
     kwargs = to_rerun_kwargs or {}
     last = 0.0
     last_frame_id_by_path: dict[str, str] = {}
-    
+
     # If a static camera model was provided, we can use it to log pinholes immediately
     # even if we haven't seen a CameraInfo message yet.
     if camera_model:
@@ -121,7 +137,7 @@ def make_rerun_tap(
                         image_plane_distance=0.5,
                     )
                     rr.log(entity_path, pinhole, static=True)
-                    for p in (also_log_to or []):
+                    for p in also_log_to or []:
                         rr.log(p, pinhole, static=True)
                     _LAST_LOGGED_PINHOLE_RES_BY_ENTITY[entity_path] = (int(w), int(h))
                     return
@@ -156,7 +172,7 @@ def make_rerun_tap(
                                 image_plane_distance=0.5,
                             )
                             rr.log(entity_path, pinhole, static=True)
-                            for p in (also_log_to or []):
+                            for p in also_log_to or []:
                                 rr.log(p, pinhole, static=True)
                             _LAST_LOGGED_PINHOLE_RES_BY_ENTITY[entity_path] = (img_w, img_h)
             except Exception:
@@ -181,9 +197,7 @@ def make_rerun_tap(
                 return
 
         rr.log(entity_path, data, static=static)
-        for p in (also_log_to or []):
+        for p in also_log_to or []:
             rr.log(p, data, static=static)
 
     return _cb
-
-

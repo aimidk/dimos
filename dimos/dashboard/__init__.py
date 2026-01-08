@@ -20,9 +20,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from dimos.core.blueprints import ModuleBlueprintSet
-from dimos.core.global_config import GlobalConfig
 from dimos.dashboard.rerun_init import init_rerun_if_enabled
+
+if TYPE_CHECKING:
+    from dimos.core.global_config import GlobalConfig
 
 __all__ = ["init_rerun_if_enabled", "rerun_viz"]
 
@@ -90,7 +94,9 @@ def rerun_viz(
                 for c in out_conns
             )
             camera_entity_path = (
-                f"{entity_prefix}/{bp.module.__name__}/camera" if (has_caminfo and has_image) else None
+                f"{entity_prefix}/{bp.module.__name__}/camera"
+                if (has_caminfo and has_image)
+                else None
             )
             camera_image_entity_path = camera_entity_path  # log both pinhole + image on same entity
             forced_camera_frame_id = None
@@ -173,7 +179,10 @@ def rerun_viz(
                 # We log pinhole + image on the same entity, so no duplication needed.
                 if camera_entity_path is not None and camera_image_entity_path is not None:
                     msg_name_local = getattr(conn.type, "msg_name", "")
-                    if entity_path == camera_entity_path and msg_name_local == "sensor_msgs.CameraInfo":
+                    if (
+                        entity_path == camera_entity_path
+                        and msg_name_local == "sensor_msgs.CameraInfo"
+                    ):
                         also_log_to = None
 
                 # Prefer "latest-only" logging for high-bandwidth streams instead of rate limiting:
@@ -231,9 +240,10 @@ def rerun_viz(
         if send_blueprint and not _blueprint_sent:
             # Send from the main process (this hook runs in the build() process).
             try:
+                import rerun as rr  # type: ignore[import-not-found]
+
                 from dimos.dashboard.rerun_blueprint import send_default_blueprint
                 from dimos.dashboard.rerun_init import connect_rerun
-                import rerun as rr  # type: ignore[import-not-found]
 
                 connect_rerun(server_addr=server_addr, recording_id=recording_id)
                 # Define "map" as the root frame for the TF tree.
