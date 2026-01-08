@@ -34,17 +34,6 @@
     "notes": "aiortc is a Python implementation of WebRTC and ORTC for audio and video communication. It requires FFmpeg libraries for media processing: libavcodec for codec operations, libavformat for container formats, libavutil for utilities, libswscale for video scaling, libswresample for audio resampling, libavdevice for device access, and libavfilter for filtering. Additionally, it needs libopus-dev for Opus audio codec support, libvpx-dev for VP8/VP9 video codec support, and libsrtp2-dev for Secure Real-time Transport Protocol. Build tools (pkg-config, python3-dev, build-essential) are required for compiling native extensions during pip installation. On macOS via Homebrew, the ffmpeg package includes most codecs, but opus, libvpx, and srtp should be installed separately. On NixOS, the equivalent packages provide the same functionality. The package has native C extensions that need to be compiled during installation.",
     "requirement": "aiortc"
   },
-  "dataclasses": {
-    "apt_dependencies": [
-    ],
-    "brew_dependencies": [
-    ],
-    "description": "",
-    "nix_dependencies": [
-    ],
-    "notes": "",
-    "requirement": "dataclasses"
-  },
   "anthropic": {
     "apt_dependencies": [
       "python3",
@@ -324,13 +313,11 @@
     "requirement": "contact-graspnet-pytorch"
   },
   "coverage": {
-    "apt_dependencies": [
-      "python3",
-      "python3-pip",
-      "build-essential"
-    ],
-    "description": "System dependencies required for coverage>=7.0 pip package on Ubuntu/Debian systems",
-    "notes": "Coverage.py is a code coverage measurement tool for Python. It includes optional C extensions for performance optimization. build-essential (which provides gcc and build tools) is needed if building from source or compiling the C extensions. For most installations using pre-built wheels, only python3 and python3-pip are strictly required. The C extension significantly improves performance but is not mandatory for the package to function.",
+    "apt_dependencies": [],
+    "brew_dependencies": [],
+    "description": "System dependencies required for coverage>=7.0 pip package",
+    "nix_dependencies": [],
+    "notes": "Coverage.py is a code coverage measurement tool for Python. While it includes C extensions for performance, these are distributed as pre-compiled wheels on PyPI for all major platforms (Linux, macOS, Windows). When installing via pip, the wheel packages are used by default, requiring no system dependencies, build tools, or external libraries. The package is self-contained and only requires Python itself to run. No apt packages, brew packages, or nix packages are required for installation or runtime.",
     "requirement": "coverage>=7.0"
   },
   "ctransformers": {
@@ -443,27 +430,59 @@
   },
   "dataclasses": {
     "apt_dependencies": [],
+    "brew_dependencies": [],
+    "description": "A backport of the dataclasses module for Python 3.6",
+    "nix_dependencies": [],
     "notes": "Pure Python module with no system dependencies. Part of Python standard library since 3.7, only needed as backport for Python < 3.7",
-    "requirement": "dataclasses",
-    "type": "pip"
+    "requirement": "dataclasses"
   },
   "detectron2": {
     "apt_dependencies": [
       "build-essential",
-      "g++",
       "gcc",
+      "g++",
       "python3-dev",
       "python3-pip",
       "git",
       "ninja-build",
+      "cmake",
+      "pkg-config",
       "python3-opencv",
       "libopencv-dev",
       "ca-certificates",
       "wget",
-      "cmake"
+      "libgl1-mesa-glx",
+      "libglib2.0-0",
+      "libsm6",
+      "libxext6",
+      "libxrender-dev",
+      "libgomp1"
     ],
-    "description": "System dependencies required for detectron2 (Facebook AI Research's object detection library) on Ubuntu/Debian systems",
-    "notes": "detectron2 requires gcc & g++ \u2265 5.4 for compilation. The package must be built from source as it uses C++ extensions with CUDA/PyTorch. build-essential provides essential compilation tools. python3-dev provides Python headers needed for building C++ extensions. ninja-build is optional but recommended for faster builds. python3-opencv and libopencv-dev provide OpenCV which is optional but needed for demos and visualization. ca-certificates is needed for secure downloads. cmake is required as a build dependency (version from pip is preferred over apt as the apt version may be too old). PyTorch and torchvision must be installed separately and match versions. For GPU support, CUDA toolkit and appropriate NVIDIA drivers are required but are typically installed separately.",
+    "brew_dependencies": [
+      "gcc",
+      "cmake",
+      "ninja",
+      "pkg-config",
+      "opencv",
+      "wget",
+      "glib",
+      "mesa",
+      "libomp"
+    ],
+    "description": "System dependencies required for detectron2 (Facebook AI Research's object detection library built on PyTorch)",
+    "nix_dependencies": [
+      "gcc",
+      "cmake",
+      "ninja",
+      "pkg-config",
+      "opencv4",
+      "wget",
+      "glib",
+      "libGL",
+      "mesa"
+    ],
+    "notes": "detectron2 requires gcc & g++ >= 5.4 for compilation. The package must be built from source as it uses C++ extensions with CUDA/PyTorch. build-essential provides essential compilation tools including make. python3-dev provides Python headers needed for building C++ extensions. ninja-build is recommended for faster builds (preferred over make). cmake is required as a build dependency for configuring the build system. pkg-config helps locate installed libraries. python3-opencv and libopencv-dev provide OpenCV which is required for image processing, demos, and visualization. ca-certificates is needed for secure downloads. wget may be needed for downloading pretrained models. OpenGL libraries (libgl1-mesa-glx, mesa) are needed for visualization. GLib (libglib2.0-0, glib) provides low-level utilities. X11 libraries (libsm6, libxext6, libxrender-dev) are needed for display on Linux. OpenMP (libgomp1, libomp) provides parallel processing support. PyTorch (>=1.10) and torchvision must be installed separately and match versions. For GPU support, CUDA toolkit (10.2, 11.1, 11.3, or 11.8) and appropriate NVIDIA drivers are required but are typically installed separately. The package supports Python 3.7-3.11 and Linux/macOS (Windows via WSL2). On macOS, Xcode Command Line Tools are also required.",
+    "package": "detectron2",
     "requirement": "detectron2"
   },
   "dimos-lcm": {
@@ -540,8 +559,16 @@
       "g++",
       "libstdc++6"
     ],
-    "description": "System dependencies required for fasttext pip package on Ubuntu/Debian systems",
-    "notes": "FastText is a library for efficient learning of word representations and sentence classification. It requires C++ compilation tools (g++, build-essential) to build the native extension modules. libstdc++6 provides the C++ standard library runtime. For pre-built wheels on common platforms (x86_64, arm64), only python3 and python3-pip are strictly required at runtime, but the build dependencies are included for systems that need to compile from source or for platforms without wheel support.",
+    "brew_dependencies": [
+      "python3",
+      "gcc"
+    ],
+    "description": "System dependencies required for fasttext pip package",
+    "nix_dependencies": [
+      "python3",
+      "gcc"
+    ],
+    "notes": "FastText is a library for efficient learning of word representations and sentence classification. It requires C++ compilation tools (g++, build-essential) to build the native extension modules. libstdc++6 provides the C++ standard library runtime. For pre-built wheels on common platforms (x86_64, arm64), only python3 and python3-pip are strictly required at runtime, but the build dependencies are included for systems that need to compile from source or for platforms without wheel support. On macOS, Xcode Command Line Tools provide the base build environment, but gcc is specified for consistency. On NixOS, stdenv provides the standard build environment including make and other essential tools.",
     "requirement": "fasttext"
   },
   "ffmpeg-python": {
@@ -618,8 +645,14 @@
       "python3",
       "python3-pip"
     ],
-    "description": "System dependencies required for ftfy>=6.3.1 pip package on Ubuntu/Debian systems",
-    "notes": "ftfy is a pure Python package for fixing Unicode text encoding issues (mojibake). It only requires wcwidth as a Python dependency, which is also pure Python. No C extensions or system libraries are needed beyond the basic Python runtime environment. Pre-built wheels are available for all platforms.",
+    "brew_dependencies": [
+      "python3"
+    ],
+    "description": "System dependencies required for ftfy pip package",
+    "nix_dependencies": [
+      "python3"
+    ],
+    "notes": "ftfy (fixes text for you) is a pure Python package for fixing Unicode text encoding issues (mojibake). It only requires wcwidth as a Python dependency, which is also pure Python. No C extensions or system libraries are needed beyond the basic Python runtime environment. Pre-built wheels are available for all platforms, so no compilation is required. The package works with Python 3.8+ and has no platform-specific or binary dependencies.",
     "requirement": "ftfy"
   },
   "gdown": {
@@ -1373,21 +1406,18 @@
     "requirement": "mujoco>=3.3.4"
   },
   "mypy": {
-    "apt_dependencies": [
-      "python3",
-      "python3-pip",
-      "build-essential"
-    ],
-    "description": "System dependencies required for mypy==1.19.0 pip package on Ubuntu/Debian systems",
-    "notes": "Mypy is a static type checker for Python that is primarily pure Python code. The package includes librt (mypyc runtime library) which is distributed as compiled wheels for common platforms. The build-essential package is included to handle potential compilation scenarios on architectures without pre-built wheels, though this is rarely needed. For typical installations using pre-built wheels (most common), only python3 and python3-pip are strictly required. Mypy requires Python >=3.9.",
+    "apt_dependencies": [],
+    "brew_dependencies": [],
+    "description": "System dependencies required for mypy==1.19.0 pip package",
+    "nix_dependencies": [],
+    "notes": "Mypy is a static type checker for Python. It is implemented in Python and distributed as a pure Python wheel package. Mypy has no system library dependencies or build requirements beyond Python itself. It only requires Python to be installed and runs entirely in Python space without needing any compiled extensions or external system libraries. No apt packages, brew packages, or nix packages are required.",
     "requirement": "mypy==1.19.0"
   },
   "nltk": {
-    "apt_dependencies": [
-      "python3",
-      "python3-pip"
-    ],
-    "description": "System dependencies required for nltk pip package on Ubuntu/Debian systems",
+    "apt_dependencies": [],
+    "brew_dependencies": [],
+    "description": "System dependencies required for nltk pip package",
+    "nix_dependencies": [],
     "notes": "NLTK (Natural Language Toolkit) is a pure Python library and does not require additional system libraries beyond Python itself. However, some NLTK data packages and optional features may benefit from additional tools like java (for Stanford NLP tools), perl, or specific tokenizers, but these are not required for basic NLTK functionality. The library primarily works with downloaded corpora and models accessed through nltk.download().",
     "requirement": "nltk"
   },
@@ -2055,16 +2085,12 @@
     "requirement": "plum-dispatch==2.5.7"
   },
   "pre_commit": {
-    "apt_dependencies": [
-      "git",
-      "python3",
-      "python3-pip",
-      "build-essential",
-      "libyaml-dev"
-    ],
-    "description": "System dependencies required for pre_commit==4.2.0 pip package on Ubuntu/Debian systems",
-    "notes": "Pre-commit is a framework for managing git hooks. It requires git for hook functionality. The build-essential and libyaml-dev packages are needed for compiling PyYAML (a dependency) with C extensions for better performance. If installing from pre-built wheels, only git, python3, and python3-pip are strictly required at runtime. Pre-commit also uses virtualenv and nodeenv to create isolated environments for hooks written in different languages.",
-    "requirement": "pre_commit"
+    "apt_dependencies": [],
+    "brew_dependencies": [],
+    "description": "System dependencies required for pre_commit==4.2.0 pip package",
+    "nix_dependencies": [],
+    "notes": "pre-commit is a framework for managing and maintaining multi-language pre-commit hooks. It is a pure Python package distributed as wheels with only Python dependencies (cfgv, identify, nodeenv, pyyaml, virtualenv). The package has no system library dependencies or build requirements for installation. While pre-commit uses git at runtime to manage hooks, git is a runtime requirement for the tool's functionality, not a build or installation dependency of the pip package itself.",
+    "requirement": "pre_commit==4.2.0"
   },
   "pyaudio": {
     "apt_dependencies": [
@@ -2250,12 +2276,11 @@
     "requirement": "pyrender>=0.1.45"
   },
   "pytest": {
-    "apt_dependencies": [
-      "python3",
-      "python3-pip"
-    ],
-    "description": "System dependencies required for pytest==8.3.5 pip package on Ubuntu/Debian systems",
-    "notes": "pytest is a pure Python testing framework and does not require additional system-level dependencies beyond Python itself. All of pytest's dependencies (iniconfig, packaging, pluggy) are also pure Python packages available via pip. The framework works on Python 3.8+ and only requires the base Python installation and pip package manager.",
+    "apt_dependencies": [],
+    "brew_dependencies": [],
+    "description": "System dependencies required for pytest==8.3.5 pip package",
+    "nix_dependencies": [],
+    "notes": "Pytest is a mature full-featured Python testing framework. It is implemented in pure Python and distributed as a pure Python wheel package. Pytest has no system library dependencies or build requirements beyond Python itself. It only requires Python (>=3.8) to be installed and runs entirely in Python space without needing any compiled extensions or external system libraries. No apt packages, brew packages, or nix packages are required.",
     "requirement": "pytest==8.3.5"
   },
   "pytest-asyncio": {
@@ -2392,14 +2417,19 @@
   },
   "regex": {
     "apt_dependencies": [
-      "python3",
-      "python3-pip",
       "python3-dev",
       "build-essential",
       "gcc"
     ],
-    "description": "System dependencies required for regex pip package on Ubuntu/Debian systems",
-    "notes": "The regex module is an alternative regular expression module for Python that is backwards-compatible with the standard 're' module but offers additional functionality. It contains C extensions that need to be compiled. python3-dev provides Python header files, build-essential includes make and other build tools, and gcc is the C compiler. For most modern platforms, pre-built wheels are available on PyPI, making these build dependencies only necessary when building from source on unsupported architectures or when wheels are not available. At runtime, only python3 is strictly required when using pre-built wheels.",
+    "brew_dependencies": [
+      "python3"
+    ],
+    "description": "System dependencies required for regex pip package",
+    "nix_dependencies": [
+      "python3",
+      "gcc"
+    ],
+    "notes": "The regex module is an alternative to Python's built-in re module, providing additional functionality and better Unicode support. It is implemented as a C extension module for performance. The module requires: python3-dev/python3 for Python development headers and API access, build-essential/gcc for C compiler to compile the extension module. On macOS with Homebrew, the system typically has Xcode Command Line Tools installed which provides the necessary compiler toolchain, so only python3 is explicitly needed. On Linux, build-essential provides gcc, make, and other essential build tools. The module is self-contained and does not depend on external libraries beyond the standard C library. Pre-built wheels are available for most platforms, but these dependencies are needed when building from source or on platforms without wheel support.",
     "requirement": "regex"
   },
   "requests": {
@@ -2421,13 +2451,36 @@
     "requirement": "requests"
   },
   "requests-mock": {
-    "apt_dependencies": [
-      "python3",
-      "python3-pip"
-    ],
-    "description": "System dependencies required for requests-mock==1.12.1 pip package on Ubuntu/Debian systems",
-    "notes": "requests-mock is a pure Python library that provides a mock/stub implementation of the requests library for testing purposes. It has no compiled extensions or system-level dependencies beyond Python itself. The package depends on the 'requests' library (also pure Python) and 'six' for Python 2/3 compatibility. No additional apt packages are required beyond python3 and python3-pip.",
+    "apt_dependencies": [],
+    "brew_dependencies": [],
+    "description": "System dependencies required for requests-mock==1.12.1 pip package",
+    "nix_dependencies": [],
+    "notes": "requests-mock is a pure Python testing utility that provides a mock adapter for the requests library. It allows testing of HTTP requests without making actual network calls. The package is implemented entirely in Python and distributed as a pure Python wheel with no compiled extensions. It has no system library dependencies or build requirements beyond Python itself (>=3.8) and only requires the requests library as a Python dependency. No apt packages, brew packages, or nix packages are required.",
     "requirement": "requests-mock==1.12.1"
+  },
+  "rerun-sdk": {
+    "apt_dependencies": [
+      "libgtk-3-dev",
+      "libxkbcommon-x11-0",
+      "vulkan-tools",
+      "libvulkan1",
+      "mesa-vulkan-drivers"
+    ],
+    "brew_dependencies": [
+      "gtk+3",
+      "vulkan-loader",
+      "molten-vk"
+    ],
+    "description": "System dependencies required for rerun-sdk>=0.20.0 pip package",
+    "nix_dependencies": [
+      "gtk3",
+      "libxkbcommon",
+      "vulkan-tools",
+      "vulkan-loader",
+      "mesa"
+    ],
+    "notes": "Rerun SDK is a logging and visualization tool for multimodal data (images, point clouds, tensors, etc.) used in robotics, computer vision, and spatial AI. The rerun-sdk pip package bundles pre-compiled binaries, but requires system graphics libraries for the viewer to function. Key dependencies include: GTK3 (libgtk-3-dev/gtk+3/gtk3) for GUI rendering and windowing, libxkbcommon (libxkbcommon-x11-0/libxkbcommon) for X11 keyboard input handling on Linux, and Vulkan libraries (vulkan-tools, libvulkan1/vulkan-loader, mesa-vulkan-drivers/molten-vk/mesa) for GPU-accelerated graphics rendering. The viewer is graphics-intensive and requires access to a local GPU - X-forwarding over SSH is not recommended. On macOS, MoltenVK provides Vulkan support through Metal. On Linux, mesa-vulkan-drivers provides Vulkan support for Mesa drivers. The viewer uses wgpu for graphics rendering which requires Vulkan support. Minimum requirements mentioned in conda-forge: glibc >=2.27 on Linux, macOS >=11.0.",
+    "requirement": "rerun-sdk>=0.20.0"
   },
   "rtree": {
     "apt_dependencies": [
@@ -2444,8 +2497,10 @@
   },
   "ruff": {
     "apt_dependencies": [],
-    "description": "System dependencies required for ruff==0.14.3 pip package on Ubuntu/Debian systems",
-    "notes": "Ruff is an extremely fast Python linter and code formatter written in Rust. It is distributed as pre-compiled platform-specific wheels that contain statically-linked binaries. Ruff has no system library dependencies or build requirements - it only requires Python itself to be installed. The wheel includes all necessary compiled code and runs out of the box without any additional apt packages.",
+    "brew_dependencies": [],
+    "description": "System dependencies required for ruff==0.14.3 pip package",
+    "nix_dependencies": [],
+    "notes": "Ruff is an extremely fast Python linter and code formatter written in Rust. It is distributed as pre-compiled platform-specific wheels that contain statically-linked binaries. Ruff has no system library dependencies or build requirements - it only requires Python itself to be installed. The wheel includes all necessary compiled code and runs out of the box without any additional apt packages, brew packages, or nix packages.",
     "requirement": "ruff==0.14.3"
   },
   "rxpy-backpressure": {
@@ -2667,21 +2722,19 @@
     "requirement": "tensorzero==2025.7.5"
   },
   "terminaltexteffects": {
-    "apt_dependencies": [
-      "python3",
-      "python3-pip"
-    ],
-    "description": "System dependencies required for terminaltexteffects==0.12.2 pip package on Ubuntu/Debian systems",
-    "notes": "TerminalTextEffects is a pure Python package with no third-party dependencies. It requires only Python 3.8+ and uses standard ANSI terminal sequences. No additional system libraries or build tools are needed. The package works out of the box with just python3 and python3-pip for installation.",
-    "requirement": "terminaltexteffects"
+    "apt_dependencies": [],
+    "brew_dependencies": [],
+    "description": "System dependencies required for terminaltexteffects==0.12.2 pip package",
+    "nix_dependencies": [],
+    "notes": "TerminalTextEffects (TTE) is a terminal visual effects engine. It is implemented in Python and distributed as a pure Python wheel package (py3-none-any). The package has no Python package dependencies (no requires_dist) and no system library dependencies or build requirements beyond Python itself (>=3.8). It uses standard ANSI terminal sequences for terminal interactions and runs entirely in Python space without needing any compiled extensions or external system libraries. No apt packages, brew packages, or nix packages are required.",
+    "requirement": "terminaltexteffects==0.12.2"
   },
   "textual": {
-    "apt_dependencies": [
-      "python3",
-      "python3-pip"
-    ],
-    "description": "System dependencies required for textual==3.7.1 pip package on Ubuntu/Debian systems",
-    "notes": "Textual is a modern Text User Interface (TUI) framework for Python. It is distributed as a pure Python wheel (py3-none-any) and has no compiled extensions. The package only requires Python 3.8+ and pip for installation. All of its core dependencies (markdown-it-py, rich, typing-extensions, platformdirs) are also pure Python packages. The optional syntax highlighting features (textual[syntax]) use tree-sitter, which provides pre-compiled binary wheels for all major platforms with no additional system library dependencies. For basic installation, only python3 and python3-pip are required.",
+    "apt_dependencies": [],
+    "brew_dependencies": [],
+    "description": "System dependencies required for textual==3.7.1 pip package",
+    "nix_dependencies": [],
+    "notes": "Textual is a TUI (Text User Interface) framework for Python developed by Textualize. It is implemented in Python and distributed as a pure Python wheel package. Textual has no system library dependencies or build requirements beyond Python itself. It only requires Python to be installed and runs entirely in Python space without needing any compiled extensions or external system libraries. The framework works in terminal emulators and provides a reactive framework for building terminal applications with rich widgets and layouts. No apt packages, brew packages, or nix packages are required.",
     "requirement": "textual==3.7.1"
   },
   "tiktoken": {
@@ -3092,6 +3145,54 @@
     "notes": "This package is used to connect to Unitree Go2 and G1 robots via WebRTC. The main dependencies are: portaudio19-dev (for pyaudio and sounddevice audio I/O), various libav* packages (for aiortc WebRTC library), libvpx-dev and libopus-dev (for video/audio codecs), libsrtp2-dev (for secure RTP), liblz4-dev (for LZ4 compression), and ffmpeg (for pydub audio processing). The build-essential and python3-dev packages are needed for building native extensions during pip installation. On macOS (Homebrew), ffmpeg includes all the libav* libraries. On NixOS, the equivalent packages provide the same functionality. Python dependencies include aiortc-dimos, sounddevice, pyaudio, pydub, lz4, and opencv-python.",
     "requirement": "unitree-webrtc-connect"
   },
+  "unitree-webrtc-connect-leshy": {
+    "apt_dependencies": [
+      "portaudio19-dev",
+      "libportaudio2",
+      "libasound2-dev",
+      "libavcodec-dev",
+      "libavformat-dev",
+      "libavutil-dev",
+      "libswscale-dev",
+      "libswresample-dev",
+      "libavdevice-dev",
+      "libavfilter-dev",
+      "libopus-dev",
+      "libvpx-dev",
+      "libsrtp2-dev",
+      "python3-dev",
+      "build-essential",
+      "pkg-config",
+      "libgl1-mesa-glx",
+      "libglib2.0-0",
+      "libsm6",
+      "libxext6",
+      "libxrender-dev",
+      "libgomp1"
+    ],
+    "brew_dependencies": [
+      "portaudio",
+      "ffmpeg",
+      "opus",
+      "libvpx",
+      "srtp",
+      "pkg-config",
+      "opencv"
+    ],
+    "description": "System dependencies required for unitree-webrtc-connect-leshy pip package",
+    "nix_dependencies": [
+      "portaudio",
+      "ffmpeg",
+      "libopus",
+      "libvpx",
+      "srtp",
+      "pkg-config",
+      "python3",
+      "opencv4"
+    ],
+    "notes": "unitree-webrtc-connect-leshy is a Python WebRTC driver for connecting to Unitree Go2 and G1 robots. It has several key dependencies that require system libraries: (1) aiortc for WebRTC functionality requires FFmpeg libraries (libavcodec, libavformat, libavutil, libswscale, libswresample, libavdevice, libavfilter) for media processing, plus libopus-dev for Opus codec, libvpx-dev for VP8/VP9 video codec, and libsrtp2-dev for secure RTP; (2) pyaudio and sounddevice for audio I/O both require PortAudio (portaudio19-dev and libportaudio2 on Linux, plus libasound2-dev for ALSA backend); (3) opencv-python for video processing requires OpenGL (libgl1-mesa-glx), GLib (libglib2.0-0), X11 libraries (libsm6, libxext6, libxrender-dev), and OpenMP (libgomp1); (4) build tools (python3-dev, build-essential, pkg-config) are needed for compiling native extensions. The package also uses wasmtime for LIDAR decoding (self-contained, no system deps), pycryptodome for encryption, and various other Python packages with minimal system requirements. The official README explicitly requires portaudio19-dev installation on apt-based systems. On macOS via Homebrew, portaudio, ffmpeg (includes most codecs), opus, libvpx, srtp, and opencv packages are needed. On NixOS, equivalent packages provide the same functionality.",
+    "requirement": "unitree-webrtc-connect-leshy>=2.0.7"
+  },
   "uvicorn": {
     "apt_dependencies": [
       "python3-dev",
@@ -3120,6 +3221,14 @@
     "nix_dependencies": [],
     "notes": "Wasmtime is a WebAssembly runtime that ships with pre-built binary wheels for all major platforms (Linux x86_64, Linux aarch64, macOS, Windows). The wheels contain the compiled Wasmtime runtime statically linked, so no external system libraries or compilation tools are required. The package is fully self-contained and works out of the box after pip installation on supported platforms (Python 3.9+ on Windows, macOS, and Linux for x86_64 and arm64 architectures). If building from source (uncommon), Rust toolchain would be required, but PyPI provides pre-compiled wheels for all standard platforms, making system dependencies unnecessary for typical usage.",
     "requirement": "wasmtime"
+  },
+  "watchdog": {
+    "apt_dependencies": [],
+    "brew_dependencies": [],
+    "description": "System dependencies required for watchdog>=3.0.0 pip package",
+    "nix_dependencies": [],
+    "notes": "Watchdog is a Python library and shell utilities to monitor filesystem events. It is distributed as a pure Python wheel package. Watchdog uses platform-specific filesystem monitoring APIs: inotify on Linux, FSEvents on macOS, ReadDirectoryChangesW on Windows, and kqueue on BSD. These are all provided by the operating system kernel and do not require additional system packages to be installed. The package has no external system library dependencies or build requirements beyond Python itself. No apt packages, brew packages, or nix packages are required.",
+    "requirement": "watchdog>=3.0.0"
   },
   "xarm-python-sdk": {
     "apt_dependencies": [],
