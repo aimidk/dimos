@@ -23,6 +23,7 @@ from xarm.wrapper import XArmAPI
 from dimos.core.transport import LCMTransport
 from dimos.msgs.sensor_msgs import Image
 from dimos.msgs.sensor_msgs.image_impls.AbstractImage import ImageFormat
+from dimos.msgs.sensor_msgs import JointState
 
 ACTION_HORIZON = 15
 ACTION_CHUNK = None
@@ -51,11 +52,29 @@ def get_camera_image(timeout: float = 5.0, topic: str = "/camera/color") -> np.n
 
     return image_data["image"]
 
+def get_xarm_joint_positions(timeout: float = 5.0, topic: str = "/xarm/joint_states"):
+    event = threading.Event()
+    joint_positions: dict[str, np.ndarray] = {}
+
+    def on_joint_state(msg: JointState) -> None:
+        if event.is_set():
+            return
+        joint_positions["joint_positions"] = msg.position
+        event.set()
+
+    transport = LCMTransport(topic, JointState)
+    transport.subscribe(on_joint_state)
+
+    if not event.wait(timeout=timeout):
+        raise TimeoutError(f"No joint states received on {topic} within {timeout} seconds.")
+
+    return joint_positions["joint_positions"]
+
 def get_observation():
     return {
         "observation/exterior_image_1_left": get_camera_image(), # ADD SECOND CAMERA IN BLUEPRINT DEFINED WITH SERIAL NUMBER
         "observation/wrist_image_left": get_camera_image(),
-        "observation/joint_position": xarm_to_franka(arm.get_servo_angle()[1]),
+        "observation/joint_position": get_xarm_joint_positions(),
         "observation/gripper_position": 0.0,
         "prompt": "move the arm slightly to the left",
     }
