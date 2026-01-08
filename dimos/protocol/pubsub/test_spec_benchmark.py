@@ -23,15 +23,19 @@ Run with: pytest -m benchmark -v -s dimos/protocol/pubsub/test_spec_benchmark.py
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+import pickle
+import threading
 import time
 from typing import Any
 
 import pytest
 
 from dimos.msgs.geometry_msgs import Vector3
+from dimos.msgs.sensor_msgs.Image import Image
 from dimos.protocol.pubsub.lcmpubsub import LCM, Topic
 from dimos.protocol.pubsub.memory import Memory
 from dimos.protocol.pubsub.shmpubsub import PickleSharedMemory
+from dimos.utils.data import get_data
 
 # =============================================================================
 # Benchmark Results Collection
@@ -41,13 +45,13 @@ from dimos.protocol.pubsub.shmpubsub import PickleSharedMemory
 @dataclass
 class BenchmarkResult:
     transport: str
-    test_type: str  # "message" or "image"
+    payload: str
     duration: float
     sent: int
     received: int
+    msg_size_bytes: int
     throughput_msg_s: float
-    throughput_gb_s: float = 0.0
-    img_size_kb: float = 0.0
+    throughput_gb_s: float
 
 
 @dataclass
@@ -62,36 +66,39 @@ class BenchmarkResults:
             return
 
         print("\n")
-        print("=" * 70)
+        print("=" * 75)
         print("BENCHMARK SUMMARY")
-        print("=" * 70)
+        print("=" * 75)
 
-        # Message throughput table
-        msg_results = [r for r in self.results if r.test_type == "message"]
-        if msg_results:
-            print("\n## Message Throughput (small messages)\n")
-            print(f"{'Transport':<12} {'msgs/sec':>15} {'Sent':>12} {'Received':>12}")
-            print("-" * 55)
-            for r in sorted(msg_results, key=lambda x: -x.throughput_msg_s):
-                print(
-                    f"{r.transport:<12} {r.throughput_msg_s:>15,.0f} {r.sent:>12,} {r.received:>12,}"
-                )
+        # Group by payload type
+        payloads = sorted(set(r.payload for r in self.results))
 
-        # Image bandwidth table
-        img_results = [r for r in self.results if r.test_type == "image"]
-        if img_results:
-            print("\n## Image Bandwidth (900KB frames)\n")
+        for payload in payloads:
+            payload_results = [r for r in self.results if r.payload == payload]
+            if not payload_results:
+                continue
+
+            # Get size from first result
+            size_bytes = payload_results[0].msg_size_bytes
+            if size_bytes >= 1024 * 1024:
+                size_str = f"{size_bytes / (1024 * 1024):.1f} MB"
+            elif size_bytes >= 1024:
+                size_str = f"{size_bytes / 1024:.1f} KB"
+            else:
+                size_str = f"{size_bytes} B"
+
+            print(f"\n## {payload} ({size_str})\n")
             print(
                 f"{'Transport':<12} {'GB/sec':>10} {'msgs/sec':>12} {'Sent':>10} {'Received':>10}"
             )
             print("-" * 58)
-            for r in sorted(img_results, key=lambda x: -x.throughput_gb_s):
+            for r in sorted(payload_results, key=lambda x: -x.throughput_gb_s):
                 print(
                     f"{r.transport:<12} {r.throughput_gb_s:>10.2f} {r.throughput_msg_s:>12,.0f} "
                     f"{r.sent:>10,} {r.received:>10,}"
                 )
 
-        print("\n" + "=" * 70)
+        print("\n" + "=" * 75)
 
 
 @pytest.fixture(scope="module")
@@ -110,8 +117,7 @@ def benchmark_results():
 @contextmanager
 def memory_context():
     """Context manager for Memory PubSub implementation."""
-    memory = Memory()
-    yield memory
+    yield Memory()
 
 
 @contextmanager
@@ -152,206 +158,189 @@ except ImportError:
 
 
 # =============================================================================
-# Test Data
-# =============================================================================
-
-# Message throughput test data
-message_testdata: list[tuple[Callable[[], Any], str, Any]] = [
-    (memory_context, "memory", ["value1", "value2", "value3"]),
-    (lcm_context, "lcm", [Vector3(1, 2, 3), Vector3(4, 5, 6), Vector3(7, 8, 9)]),
-    (shm_context, "shm", [b"value1", b"value2", b"value3"]),
-]
-
-# Add ROS if available
-if ROS_AVAILABLE and ros_context is not None:
-    try:
-        from std_msgs.msg import String as ROSString
-
-        ros_values = [ROSString(data="v1"), ROSString(data="v2"), ROSString(data="v3")]
-        message_testdata.append((ros_context, "ros", ros_values))
-    except ImportError:
-        pass
-
-# Image bandwidth test data
-bandwidth_testdata: list[tuple[Callable[[], Any], str]] = [
-    (memory_context, "memory"),
-    (lcm_context, "lcm"),
-    (shm_context, "shm"),
-]
-
-if ROS_AVAILABLE and ros_context is not None:
-    bandwidth_testdata.append((ros_context, "ros"))
-
-
-# =============================================================================
-# Fixtures
+# Test Data Builders
 # =============================================================================
 
 
-def _get_image_size_bytes(img) -> int:
-    """Get size of image data in bytes."""
-    if hasattr(img, "data"):
-        return img.data.nbytes
-    elif hasattr(img, "__sizeof__"):
-        return img.__sizeof__()
+def _get_size_bytes(obj: Any) -> int:
+    """Get size of object in bytes."""
+    if isinstance(obj, bytes):
+        return len(obj)
+    if hasattr(obj, "data") and hasattr(obj.data, "nbytes"):
+        return obj.data.nbytes
+    if hasattr(obj, "__sizeof__"):
+        return obj.__sizeof__()
     return 0
 
 
-@pytest.fixture(scope="module")
-def test_image():
-    """Load test image once for all bandwidth tests.
-
-    Resizes to ~1MB (640x480 BGR = 921,600 bytes) for realistic bandwidth testing.
-    """
-    from dimos.msgs.sensor_msgs.Image import Image
-    from dimos.utils.data import get_data
-
+def _load_test_image() -> Image:
+    """Load and resize test image to ~900KB."""
     img_path = get_data("cafe.jpg")
     img = Image.from_file(img_path)
     return img.resize(640, 480)
 
 
-# =============================================================================
-# Benchmark Tests
-# =============================================================================
+# Build test data: (context, transport_name, topic, message, msg_size, payload_label)
+def _build_testdata() -> list[tuple[Callable[[], Any], str, Any, Any, int, str]]:
+    testdata = []
 
+    # --- Small messages ---
+    small_msg_label = "Small message"
 
-@pytest.mark.benchmark
-@pytest.mark.parametrize("pubsub_context, transport_name, values", message_testdata)
-def test_message_throughput(pubsub_context, transport_name, values, benchmark_results) -> None:
-    """Measure message throughput with small messages for 5 seconds."""
-    import threading
+    # Memory - small
+    testdata.append(
+        (memory_context, "memory", "bench_small", "hello", len("hello"), small_msg_label)
+    )
 
-    # Determine topic based on transport
-    if transport_name == "lcm":
-        topic = Topic(topic="/benchmark_msg", lcm_type=Vector3)
-    elif transport_name == "ros":
-        from std_msgs.msg import String as ROSString
-
-        topic = ROSTopic(topic="/benchmark_msg_ros", ros_type=ROSString)
-    elif transport_name == "shm":
-        topic = "/benchmark_msg_shm"
-    else:
-        topic = "benchmark_msg"
-
-    with pubsub_context() as x:
-        received_count = [0]
-        msg_received = threading.Event()
-
-        def callback(message, _topic) -> None:
-            received_count[0] += 1
-            msg_received.set()
-
-        x.subscribe(topic, callback)
-
-        # Publish messages synchronously for 5 seconds
-        duration = 5.0
-        start_time = time.time()
-        sent_count = 0
-
-        while time.time() - start_time < duration:
-            msg_received.clear()
-            x.publish(topic, values[0])
-            sent_count += 1
-            if not msg_received.wait(timeout=1.0):
-                break
-
-        elapsed = time.time() - start_time
-        throughput = received_count[0] / elapsed if elapsed > 0 else 0
-
-        # Record result
-        benchmark_results.add(
-            BenchmarkResult(
-                transport=transport_name,
-                test_type="message",
-                duration=elapsed,
-                sent=sent_count,
-                received=received_count[0],
-                throughput_msg_s=throughput,
-            )
+    # LCM - small (Vector3)
+    vec = Vector3(1.0, 2.0, 3.0)
+    testdata.append(
+        (
+            lcm_context,
+            "lcm",
+            Topic(topic="/bench_small", lcm_type=Vector3),
+            vec,
+            24,
+            small_msg_label,
         )
+    )
 
-        assert received_count[0] > 0, f"No messages received for {transport_name}"
+    # SHM - small
+    shm_small = b"hello"
+    testdata.append(
+        (shm_context, "shm", "/bench_small_shm", shm_small, len(shm_small), small_msg_label)
+    )
+
+    # ROS - small
+    if ROS_AVAILABLE and ros_context is not None:
+        try:
+            from std_msgs.msg import String as ROSString
+
+            ros_msg = ROSString(data="hello")
+            testdata.append(
+                (
+                    ros_context,
+                    "ros",
+                    ROSTopic(topic="/bench_small_ros", ros_type=ROSString),
+                    ros_msg,
+                    5,
+                    small_msg_label,
+                )
+            )
+        except ImportError:
+            pass
+
+    # --- Image messages (~900KB) ---
+    img_label = "Image 640x480"
+    img = _load_test_image()
+    img_size = _get_size_bytes(img)
+
+    # Memory - image
+    testdata.append((memory_context, "memory", "bench_image", img, img_size, img_label))
+
+    # LCM - image
+    testdata.append(
+        (lcm_context, "lcm", Topic(topic="/bench_image", lcm_type=Image), img, img_size, img_label)
+    )
+
+    # SHM - image (pickled)
+    img_pickled = pickle.dumps(img)
+    testdata.append(
+        (shm_context, "shm", "/bench_image_shm", img_pickled, len(img_pickled), img_label)
+    )
+
+    # ROS - image
+    if ROS_AVAILABLE and ros_context is not None:
+        try:
+            from sensor_msgs.msg import Image as ROSImage
+
+            ros_img = ROSImage()
+            ros_img.height = img.height
+            ros_img.width = img.width
+            ros_img.encoding = "bgr8"
+            ros_img.step = img.width * 3
+            ros_img.data = img.to_bgr().data.tobytes()
+            testdata.append(
+                (
+                    ros_context,
+                    "ros",
+                    ROSTopic(topic="/bench_image_ros", ros_type=ROSImage),
+                    ros_img,
+                    img_size,
+                    img_label,
+                )
+            )
+        except ImportError:
+            pass
+
+    return testdata
+
+
+# Build test data at module load
+benchmark_testdata = _build_testdata()
+
+
+# =============================================================================
+# Benchmark Test
+# =============================================================================
 
 
 @pytest.mark.benchmark
-@pytest.mark.parametrize("pubsub_context, transport_name", bandwidth_testdata)
-def test_image_bandwidth(pubsub_context, transport_name, test_image, benchmark_results) -> None:
-    """Measure image throughput: send images for 5 seconds, calculate bandwidth."""
-    import threading
-
-    from dimos.msgs.sensor_msgs.Image import Image
-
+@pytest.mark.parametrize(
+    "pubsub_context, transport_name, topic, message, msg_size, payload_label",
+    benchmark_testdata,
+    ids=[f"{t[1]}-{t[5].replace(' ', '_')}" for t in benchmark_testdata],
+)
+def test_throughput(
+    pubsub_context,
+    transport_name,
+    topic,
+    message,
+    msg_size,
+    payload_label,
+    benchmark_results,
+) -> None:
+    """Measure throughput: send messages for 5 seconds, calculate GB/s and msgs/s."""
     duration = 5.0
-    img = test_image
-    img_size = _get_image_size_bytes(img)
 
-    # Set up topic and message based on transport
-    if transport_name == "memory":
-        topic = "bandwidth_test"
-        msg = img
-    elif transport_name == "lcm":
-        topic = Topic(topic="/bandwidth_test", lcm_type=Image)
-        msg = img
-    elif transport_name == "shm":
-        topic = "/bandwidth_test_shm"
-        import pickle
-
-        msg = pickle.dumps(img)
-    elif transport_name == "ros":
-        from sensor_msgs.msg import Image as ROSImage
-
-        topic = ROSTopic(topic="/bandwidth_test_ros", ros_type=ROSImage)
-        ros_msg = ROSImage()
-        ros_msg.height = img.height
-        ros_msg.width = img.width
-        ros_msg.encoding = "bgr8"
-        ros_msg.step = img.width * 3
-        ros_msg.data = img.to_bgr().data.tobytes()
-        msg = ros_msg
-    else:
-        pytest.skip(f"Unknown transport: {transport_name}")
-
-    with pubsub_context() as x:
+    with pubsub_context() as pubsub:
         received_count = [0]
-        received_bytes = [0]
         msg_received = threading.Event()
 
-        def callback(message, _topic) -> None:
+        def callback(msg: Any, _topic: Any) -> None:
             received_count[0] += 1
-            received_bytes[0] += img_size
             msg_received.set()
 
-        x.subscribe(topic, callback)
+        pubsub.subscribe(topic, callback)
 
-        # Send images for `duration` seconds, waiting for each to be received
+        # Send messages synchronously for `duration` seconds
         start_time = time.time()
         sent_count = 0
 
         while time.time() - start_time < duration:
             msg_received.clear()
-            x.publish(topic, msg)
+            pubsub.publish(topic, message)
             sent_count += 1
             if not msg_received.wait(timeout=1.0):
                 break
 
         elapsed = time.time() - start_time
-        recv_bytes_total = received_bytes[0]
-        recv_gbps = recv_bytes_total / (elapsed * 1_000_000_000) if elapsed > 0 else 0
-        throughput_msg_s = received_count[0] / elapsed if elapsed > 0 else 0
+        recv_count = received_count[0]
+        recv_bytes = recv_count * msg_size
+        throughput_msg_s = recv_count / elapsed if elapsed > 0 else 0
+        throughput_gb_s = recv_bytes / (elapsed * 1_000_000_000) if elapsed > 0 else 0
 
-        # Record result
         benchmark_results.add(
             BenchmarkResult(
                 transport=transport_name,
-                test_type="image",
+                payload=payload_label,
                 duration=elapsed,
                 sent=sent_count,
-                received=received_count[0],
+                received=recv_count,
+                msg_size_bytes=msg_size,
                 throughput_msg_s=throughput_msg_s,
-                throughput_gb_s=recv_gbps,
-                img_size_kb=img_size / 1024,
+                throughput_gb_s=throughput_gb_s,
             )
         )
 
-        assert received_count[0] > 0, f"No messages received for {transport_name}"
+        assert recv_count > 0, f"No messages received for {transport_name}"
