@@ -20,9 +20,9 @@ import sys
 import traceback
 
 from ..support import prompt_tools as p
+from ..support.debian_tools import apt_install
 from ..support.dependency_minimizer import minimize_deps_based_on_prerequisites
 from ..support.get_system_analysis import get_system_analysis
-from ..support.debian_tools import apt_install
 from ..support.macos_tools import brew_install, ensure_xcode_cli_tools
 from ..support.misc import get_system_deps
 from ..support.setup_nix import nix_install
