@@ -581,12 +581,11 @@ class SO101SDKWrapper(BaseManipulatorSDK):
         Returns:
             Position in meters( 0.0 [closed] to 0.1 [open]) or None
         """
-        try:
-            if not self.bus:
-                return None
-            
-            raw_pos = float(self.bus.read("Present_Position", self.gripper_name))
-            return max(0.0, min(0.1, raw_pos * 0.001))
+        if not self.bus:
+            return None
+        
+        raw_pos = float(self.bus.read("Present_Position", self.gripper_name))
+        return max(0.0, min(0.1, raw_pos * 0.001))
     
     def get_cartesian_position(self) -> dict[str, float] | None:
         """Get current end-effector pose.
