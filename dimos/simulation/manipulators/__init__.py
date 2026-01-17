@@ -14,10 +14,6 @@
 
 """Simulation manipulator utilities."""
 
-from dimos.simulation.manipulators.mujoco_driver import MujocoDriver
-from dimos.simulation.manipulators.mujoco_manip_interface import (
-    MujocoManipInterface,
-)
 from dimos.simulation.manipulators.sim_manip_interface import SimManipInterface
 from dimos.simulation.manipulators.sim_module import (
     SimulationModule,
@@ -26,8 +22,6 @@ from dimos.simulation.manipulators.sim_module import (
 )
 
 __all__ = [
-    "MujocoDriver",
-    "MujocoManipInterface",
     "SimManipInterface",
     "SimulationModule",
     "SimulationModuleConfig",
