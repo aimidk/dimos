@@ -167,51 +167,71 @@ If you'd still like to switch to synchronous fetching, we provide two approaches
 color = white
 fill = none
 
-# getter_hot section
-text "getter_hot()" bold at (0.5in, 1.1in)
+# === getter_hot section ===
+H_Title: box "getter_hot()" rad 5px fit wid 170% ht 170%
 
-# Stream emitting values continuously
-Stream: box "Stream" rad 5px fit wid 170% ht 170% at (0.5in, 0.5in)
-arrow right 0.4in from Stream.e
+Sub: box "subscribe" rad 5px fit wid 170% ht 170% with .n at H_Title.s + (0, -0.5in)
+arrow from H_Title.s to Sub.n
+arrow right from Sub.e
 Cache: box "Cache" rad 5px fit wid 170% ht 170%
 
-# Values flowing into cache
-text "v1 v2 v3..." italic small at (Stream.x + 0.5in, Stream.y + 0.3in)
+# blocking box around subscribe->cache (one-time setup)
+Blk0: box dashed color 0x5c9ff0 with .nw at Sub.nw + (-0.1in, 0.25in) wid (Cache.e.x - Sub.w.x + 0.2in) ht 0.7in rad 5px
+text "blocking" italic with .n at Blk0.n + (0, -0.05in)
 
-# get_val() calls reading from cache instantly
-arrow from Cache.e right 0.3in then down 0.25in then right 0.25in
-Call1: text "get_val() → instant" small
-arrow from Cache.e right 0.3in then down 0.6in then right 0.25in
-Call2: text "get_val() → instant" small
+arrow right from Cache.e
+Getter: box "getter" rad 5px fit wid 170% ht 170%
 
-# Continuous subscription indicator
-line dashed from Stream.s down 0.2in
-text "always subscribed" italic small at (Stream.x, Stream.y - 0.45in)
+arrow from Getter.e right 0.3in then down 0.25in then right 0.2in
+G1: box invis "call()" color 0x8cbdf2 fit wid 150%
+arrow right 0.4in from G1.e
+box invis "instant" fit wid 150%
+
+arrow from Getter.e right 0.3in then down 0.7in then right 0.2in
+G2: box invis "call()" color 0x8cbdf2 fit wid 150%
+arrow right 0.4in from G2.e
+box invis "instant" fit wid 150%
+
+text "always subscribed" italic with .n at Blk0.s + (0, -0.1in)
 
 
-# getter_cold section
-text "getter_cold()" bold at (0.5in, -0.6in)
+# === getter_cold section ===
+C_Title: box "getter_cold()" rad 5px fit wid 170% ht 170% with .nw at H_Title.sw + (0, -1.6in)
 
-# Each call creates fresh subscription
-Cold1: box "get_val()" rad 5px fit wid 170% ht 170% at (0.5in, -1.0in)
-arrow right 0.3in from Cold1.e
-text "subscribe" small
-arrow right 0.3in
-text "wait" small
-arrow right 0.3in
-text "value" small
-arrow right 0.3in
-text "dispose" small
+arrow down 0.3in from C_Title.s
+ColdGetter: box "getter" rad 5px fit wid 170% ht 170%
 
-Cold2: box "get_val()" rad 5px fit wid 170% ht 170% at (0.5in, -1.5in)
-arrow right 0.3in from Cold2.e
-text "subscribe" small
-arrow right 0.3in
-text "wait" small
-arrow right 0.3in
-text "value" small
-arrow right 0.3in
-text "dispose" small
+# Branch to first call
+arrow from ColdGetter.e right 0.3in then down 0.3in then right 0.2in
+Cold1: box invis "call()" color 0x8cbdf2 fit wid 150%
+arrow right 0.4in from Cold1.e
+Sub1: box invis "subscribe" fit wid 150%
+arrow right 0.4in from Sub1.e
+Wait1: box invis "wait" fit wid 150%
+arrow right 0.4in from Wait1.e
+Val1: box invis "value" fit wid 150%
+arrow right 0.4in from Val1.e
+Disp1: box invis "dispose  " fit wid 150%
+
+# blocking box around first row
+Blk1: box dashed color 0x5c9ff0 with .nw at Cold1.nw + (-0.1in, 0.25in) wid (Disp1.e.x - Cold1.w.x + 0.2in) ht 0.7in rad 5px
+text "blocking" italic with .n at Blk1.n + (0, -0.05in)
+
+# Branch to second call
+arrow from ColdGetter.e right 0.3in then down 1.2in then right 0.2in
+Cold2: box invis "call()" color 0x8cbdf2 fit wid 150%
+arrow right 0.4in from Cold2.e
+Sub2: box invis "subscribe" fit wid 150%
+arrow right 0.4in from Sub2.e
+Wait2: box invis "wait" fit wid 150%
+arrow right 0.4in from Wait2.e
+Val2: box invis "value" fit wid 150%
+arrow right 0.4in from Val2.e
+Disp2: box invis "dispose  " fit wid 150%
+
+# blocking box around second row
+Blk2: box dashed color 0x5c9ff0 with .nw at Cold2.nw + (-0.1in, 0.25in) wid (Disp2.e.x - Cold2.w.x + 0.2in) ht 0.7in rad 5px
+text "blocking" italic with .n at Blk2.n + (0, -0.05in)
 ```
 
 </details>
