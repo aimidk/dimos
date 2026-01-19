@@ -34,8 +34,7 @@ from reactivex.disposable import Disposable
 
 from dimos.core.global_config import GlobalConfig
 from dimos.msgs.geometry_msgs import Quaternion, Twist, Vector3
-from dimos.msgs.sensor_msgs import Image, ImageFormat
-from dimos.robot.unitree_webrtc.type.lidar import LidarMessage
+from dimos.msgs.sensor_msgs import Image, ImageFormat, PointCloud2
 from dimos.robot.unitree_webrtc.type.odometry import Odometry
 from dimos.simulation.mujoco.constants import LAUNCHER_PATH, LIDAR_FPS, VIDEO_FPS
 from dimos.simulation.mujoco.shared_memory import ShmWriter
@@ -214,7 +213,7 @@ class MujocoConnection:
 
         return None
 
-    def get_lidar_message(self) -> LidarMessage | None:
+    def get_lidar_message(self) -> PointCloud2 | None:
         if self.shm_data is None:
             return None
 
@@ -263,7 +262,7 @@ class MujocoConnection:
         return Observable(on_subscribe)
 
     @functools.cache
-    def lidar_stream(self) -> Observable[LidarMessage]:
+    def lidar_stream(self) -> Observable[PointCloud2]:
         return self._create_stream(self.get_lidar_message, LIDAR_FPS, "Lidar")
 
     @functools.cache

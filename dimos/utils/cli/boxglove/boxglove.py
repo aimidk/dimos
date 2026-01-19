@@ -26,7 +26,7 @@ from textual.widgets import Footer, Static
 
 from dimos import core
 from dimos.msgs.nav_msgs import OccupancyGrid
-from dimos.robot.unitree_webrtc.type.lidar import LidarMessage
+from dimos.msgs.sensor_msgs import PointCloud2
 
 if TYPE_CHECKING:
     from reactivex.disposable import Disposable
@@ -277,7 +277,7 @@ def main() -> None:
     # app = OccupancyGridApp(core.LCMTransport("/global_costmap", OccupancyGrid).observable)
 
     app = OccupancyGridApp(
-        lambda: core.LCMTransport("/lidar", LidarMessage)  # type: ignore[no-untyped-call]
+        lambda: core.LCMTransport("/lidar", PointCloud2)  # type: ignore[no-untyped-call]
         .observable()
         .pipe(ops.map(lambda msg: msg.costmap()))  # type: ignore[attr-defined]
     )

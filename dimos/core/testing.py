@@ -20,6 +20,7 @@ import pytest  # type: ignore[import-not-found]
 from dimos.core import In, Module, Out, rpc, start
 from dimos.msgs.geometry_msgs import Vector3
 from dimos.msgs.sensor_msgs import PointCloud2
+from dimos.robot.unitree_webrtc.type.lidar import pointcloud2_from_webrtc_lidar
 from dimos.robot.unitree_webrtc.type.odometry import Odometry
 from dimos.utils.testing import SensorReplay
 
@@ -65,7 +66,7 @@ class MockRobotClient(Module):
 
     def odomloop(self) -> None:
         odomdata = SensorReplay("raw_odometry_rotate_walk", autocast=Odometry.from_msg)
-        lidardata = SensorReplay("office_lidar", autocast=LidarMessage.from_msg)
+        lidardata = SensorReplay("office_lidar", autocast=pointcloud2_from_webrtc_lidar)
 
         lidariter = lidardata.iterate()
         self._stop_event.clear()

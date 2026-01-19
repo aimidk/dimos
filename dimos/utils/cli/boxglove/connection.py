@@ -23,7 +23,7 @@ from reactivex.observable import Observable
 from dimos.msgs.nav_msgs import OccupancyGrid
 from dimos.msgs.sensor_msgs import PointCloud2
 from dimos.protocol.pubsub import lcm  # type: ignore[attr-defined]
-from dimos.robot.unitree_webrtc.type.lidar import LidarMessage
+from dimos.robot.unitree_webrtc.type.lidar import pointcloud2_from_webrtc_lidar
 from dimos.robot.unitree_webrtc.type.map import Map
 from dimos.utils.data import get_data
 from dimos.utils.reactive import backpressure
@@ -52,7 +52,9 @@ def live_connection() -> Observable[OccupancyGrid]:
 
 
 def recorded_connection() -> Observable[OccupancyGrid]:
-    lidar_store = TimedSensorReplay("unitree_office_walk/lidar", autocast=LidarMessage.from_msg)
+    lidar_store = TimedSensorReplay(
+        "unitree_office_walk/lidar", autocast=pointcloud2_from_webrtc_lidar
+    )
     mapper = Map()
     return backpressure(
         lidar_store.stream(speed=1).pipe(
