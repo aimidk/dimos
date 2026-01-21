@@ -12,15 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import cast
 
+import reactivex as rx
 from reactivex import operators as ops
+from reactivex.observable import Observable
 
 from dimos.core import In, Module, ModuleConfig, Out, rpc
 from dimos.models.embedding.base import Embedding, EmbeddingModel
 from dimos.models.embedding.clip import CLIPModel
 from dimos.msgs.geometry_msgs import PoseStamped
+from dimos.msgs.nav_msgs import OccupancyGrid
 from dimos.msgs.sensor_msgs import Image
 from dimos.msgs.sensor_msgs.Image import Image, sharpness_barrier
 from dimos.utils.reactive import backpressure, getter_hot
@@ -72,20 +76,16 @@ class EmbeddingMemory(Module[Config]):
         # (also voxel size for mapper for example would benefit from this)
         self.color_image.pure_observable().pipe(
             sharpness_barrier(0.5),
-            ops.map(self._to_spatial_entry),
-            ops.filter(self._has_pose),
+            ops.flat_map(self._try_create_spatial_entry),
             ops.map(self._embed_spatial_entry),
             ops.map(self._store_spatial_entry),
         ).subscribe(print)
 
-    def _has_pose(self, entry: SpatialEntry) -> bool:
-        return entry.pose is not None
-
-    def _to_spatial_entry(self, img: Image) -> SpatialEntry:
-        return SpatialEntry(
-            image=img,
-            pose=self.tf.get_pose("world", "base_link"),
-        )
+    def _try_create_spatial_entry(self, img: Image) -> Observable[SpatialEntry]:
+        pose = self.tf.get_pose("world", "base_link")
+        if not pose:
+            return rx.empty()
+        return rx.of(SpatialEntry(image=img, pose=pose))
 
     def _embed_spatial_entry(self, spatial_entry: SpatialEntry) -> SpatialEmbedding:
         embedding = cast("Embedding", self.config.embedding_model.embed(spatial_entry.image))
@@ -95,5 +95,10 @@ class EmbeddingMemory(Module[Config]):
             embedding=embedding,
         )
 
-    def _store_spatial_entry(self, spatial_embedding: SpatialEmbedding) -> SpatialEmbedding | None:
+    def _store_spatial_entry(self, spatial_embedding: SpatialEmbedding) -> SpatialEmbedding:
         return spatial_embedding
+
+    def query_text(self, query: str) -> list[SpatialEmbedding]:
+        self.config.embedding_model.embed_text(query)
+        results: list[SpatialEmbedding] = []
+        return results

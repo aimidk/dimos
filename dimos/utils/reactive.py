@@ -19,6 +19,7 @@ from typing import Any, Generic, TypeVar
 
 import reactivex as rx
 from reactivex import operators as ops
+from reactivex.abc import DisposableBase
 from reactivex.disposable import Disposable
 from reactivex.observable import Observable
 from reactivex.scheduler import ThreadPoolScheduler
@@ -64,7 +65,7 @@ def backpressure(
     return rx.defer(lambda *_: per_sub())  # type: ignore[no-untyped-call]
 
 
-class LatestReader(Generic[T]):
+class LatestReader(DisposableBase, Generic[T]):
     """A callable object that returns the latest value from an observable."""
 
     def __init__(self, initial_value: T, subscription, connection=None) -> None:  # type: ignore[no-untyped-def]

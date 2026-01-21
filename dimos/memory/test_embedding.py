@@ -38,7 +38,7 @@ def test_embed_frame() -> None:
         spatial_entry = SpatialEntry(image=frame, pose=dummy_pose)
 
         # Embed the frame
-        result = memory.process_spatial_entry(spatial_entry)
+        result = memory._embed_spatial_entry(spatial_entry)
 
         # Verify
         assert result is not None
