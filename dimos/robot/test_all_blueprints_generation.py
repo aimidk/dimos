@@ -34,78 +34,39 @@ IGNORED_FILES: set[str] = {
 BLUEPRINT_METHODS = {"transports", "global_config", "remappings", "requirements"}
 
 
-def _get_all_python_files(root: Path) -> Generator[Path, None, None]:
-    for path in root.rglob("*.py"):
-        rel_path = str(path.relative_to(root.parent))
-        if "__pycache__" in str(path) or rel_path in IGNORED_FILES:
-            continue
-        yield path
+def test_all_blueprints_is_current() -> None:
+    root = DIMOS_PROJECT_ROOT / "dimos"
+    all_blueprints, all_modules = _scan_for_blueprints(root)
+    generated_content = _generate_all_blueprints_content(all_blueprints, all_modules)
 
+    file_path = root / "robot" / "all_blueprints.py"
 
-def _path_to_module_name(path: Path, root: Path) -> str:
-    parts = list(path.relative_to(root.parent).parts)
-    parts[-1] = parts[-1].removesuffix(".py")
-    return ".".join(parts)
+    if "CI" in os.environ:
+        if not file_path.exists():
+            pytest.fail(f"all_blueprints.py does not exist at {file_path}")
 
+        current_content = file_path.read_text()
+        if current_content != generated_content:
+            diff = difflib.unified_diff(
+                current_content.splitlines(keepends=True),
+                generated_content.splitlines(keepends=True),
+                fromfile="all_blueprints.py (current)",
+                tofile="all_blueprints.py (generated)",
+            )
+            diff_str = "".join(diff)
+            pytest.fail(
+                f"all_blueprints.py is out of date. Run "
+                f"`pytest dimos/robot/test_all_blueprints_generation.py` locally to update.\n\n"
+                f"Diff:\n{diff_str}"
+            )
+    else:
+        file_path.write_text(generated_content)
 
-def _is_autoconnect_call(node: ast.expr) -> bool:
-    if isinstance(node, ast.Call):
-        func = node.func
-        # Direct call: autoconnect(...)
-        if isinstance(func, ast.Name) and func.id == "autoconnect":
-            return True
-        # Attribute call: module.autoconnect(...)
-        if isinstance(func, ast.Attribute) and func.attr == "autoconnect":
-            return True
-    return False
-
-
-def _ends_with_blueprint_method(node: ast.expr) -> bool:
-    if isinstance(node, ast.Call):
-        func = node.func
-        if isinstance(func, ast.Attribute) and func.attr in BLUEPRINT_METHODS:
-            return True
-    return False
-
-
-def _is_blueprint_factory(node: ast.expr) -> bool:
-    if isinstance(node, ast.Attribute):
-        return node.attr == "blueprint"
-    return False
-
-
-def _find_blueprints_in_file(file_path: Path) -> tuple[list[str], list[str]]:
-    blueprint_vars: list[str] = []
-    module_vars: list[str] = []
-
-    try:
-        source = file_path.read_text(encoding="utf-8")
-        tree = ast.parse(source, filename=str(file_path))
-    except Exception:
-        return [], []
-
-    # Only look at top-level statements (direct children of the Module node)
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-
-        # Get the variable name(s)
-        for target in node.targets:
-            if not isinstance(target, ast.Name):
-                continue
-            var_name = target.id
-
-            if var_name.startswith("_"):
-                continue
-
-            # Check if it's a blueprint (ModuleBlueprintSet instance)
-            if _is_autoconnect_call(node.value) or _ends_with_blueprint_method(node.value):
-                blueprint_vars.append(var_name)
-            # Check if it's a module factory (SomeModule.blueprint)
-            elif _is_blueprint_factory(node.value):
-                module_vars.append(var_name)
-
-    return blueprint_vars, module_vars
+        if _check_for_uncommitted_changes(file_path):
+            pytest.fail(
+                "all_blueprints.py was updated and has uncommitted changes. "
+                "Please commit the changes."
+            )
 
 
 def _scan_for_blueprints(root: Path) -> tuple[dict[str, str], dict[str, str]]:
@@ -179,36 +140,75 @@ def _check_for_uncommitted_changes(file_path: Path) -> bool:
         return False
 
 
-def test_all_blueprints_is_current() -> None:
-    root = DIMOS_PROJECT_ROOT / "dimos"
-    all_blueprints, all_modules = _scan_for_blueprints(root)
-    generated_content = _generate_all_blueprints_content(all_blueprints, all_modules)
+def _get_all_python_files(root: Path) -> Generator[Path, None, None]:
+    for path in root.rglob("*.py"):
+        rel_path = str(path.relative_to(root.parent))
+        if "__pycache__" in str(path) or rel_path in IGNORED_FILES:
+            continue
+        yield path
 
-    file_path = root / "robot" / "all_blueprints.py"
 
-    if "CI" in os.environ:
-        if not file_path.exists():
-            pytest.fail(f"all_blueprints.py does not exist at {file_path}")
+def _path_to_module_name(path: Path, root: Path) -> str:
+    parts = list(path.relative_to(root.parent).parts)
+    parts[-1] = parts[-1].removesuffix(".py")
+    return ".".join(parts)
 
-        current_content = file_path.read_text()
-        if current_content != generated_content:
-            diff = difflib.unified_diff(
-                current_content.splitlines(keepends=True),
-                generated_content.splitlines(keepends=True),
-                fromfile="all_blueprints.py (current)",
-                tofile="all_blueprints.py (generated)",
-            )
-            diff_str = "".join(diff)
-            pytest.fail(
-                f"all_blueprints.py is out of date. Run "
-                f"`pytest dimos/robot/test_all_blueprints_generation.py` locally to update.\n\n"
-                f"Diff:\n{diff_str}"
-            )
-    else:
-        file_path.write_text(generated_content)
 
-        if _check_for_uncommitted_changes(file_path):
-            pytest.fail(
-                "all_blueprints.py was updated and has uncommitted changes. "
-                "Please commit the changes."
-            )
+def _find_blueprints_in_file(file_path: Path) -> tuple[list[str], list[str]]:
+    blueprint_vars: list[str] = []
+    module_vars: list[str] = []
+
+    try:
+        source = file_path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(file_path))
+    except Exception:
+        return [], []
+
+    # Only look at top-level statements (direct children of the Module node)
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+
+        # Get the variable name(s)
+        for target in node.targets:
+            if not isinstance(target, ast.Name):
+                continue
+            var_name = target.id
+
+            if var_name.startswith("_"):
+                continue
+
+            # Check if it's a blueprint (ModuleBlueprintSet instance)
+            if _is_autoconnect_call(node.value) or _ends_with_blueprint_method(node.value):
+                blueprint_vars.append(var_name)
+            # Check if it's a module factory (SomeModule.blueprint)
+            elif _is_blueprint_factory(node.value):
+                module_vars.append(var_name)
+
+    return blueprint_vars, module_vars
+
+
+def _is_autoconnect_call(node: ast.expr) -> bool:
+    if isinstance(node, ast.Call):
+        func = node.func
+        # Direct call: autoconnect(...)
+        if isinstance(func, ast.Name) and func.id == "autoconnect":
+            return True
+        # Attribute call: module.autoconnect(...)
+        if isinstance(func, ast.Attribute) and func.attr == "autoconnect":
+            return True
+    return False
+
+
+def _ends_with_blueprint_method(node: ast.expr) -> bool:
+    if isinstance(node, ast.Call):
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr in BLUEPRINT_METHODS:
+            return True
+    return False
+
+
+def _is_blueprint_factory(node: ast.expr) -> bool:
+    if isinstance(node, ast.Attribute):
+        return node.attr == "blueprint"
+    return False
