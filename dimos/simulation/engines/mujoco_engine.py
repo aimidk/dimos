@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -29,6 +28,8 @@ from dimos.simulation.utils.xml_parser import JointMapping, build_joint_mappings
 from dimos.utils.logging_config import setup_logger
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from dimos.msgs.sensor_msgs import JointState
 
 logger = setup_logger()
@@ -43,7 +44,7 @@ class MujocoEngine(SimulationEngine):
     - applies control commands
     """
 
-    def __init__(self, config_path: str | None, headless: bool) -> None:
+    def __init__(self, config_path: Path, headless: bool) -> None:
         super().__init__(config_path=config_path, headless=headless)
 
         xml_path = self._resolve_xml_path(config_path)
@@ -75,10 +76,10 @@ class MujocoEngine(SimulationEngine):
             self._joint_position_targets[i] = current_pos
             self._joint_positions[i] = current_pos
 
-    def _resolve_xml_path(self, config_path: str | None) -> Path:
-        if not config_path:
+    def _resolve_xml_path(self, config_path: Path) -> Path:
+        if config_path is None:
             raise ValueError("config_path is required for MuJoCo simulation loading")
-        resolved = Path(config_path).expanduser()
+        resolved = config_path.expanduser()
         xml_path = resolved / "scene.xml" if resolved.is_dir() else resolved
         if not xml_path.exists():
             raise FileNotFoundError(f"MuJoCo XML not found: {xml_path}")

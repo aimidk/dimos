@@ -194,6 +194,20 @@ class SimulationModule(Module[SimulationModuleConfig]):
                     self._backend.write_joint_positions(positions)
                 elif velocities is not None:
                     self._backend.write_joint_velocities(velocities)
+                dof = self._backend.get_dof()
+                names = self._resolve_joint_names(dof)
+                positions = self._backend.read_joint_positions()
+                velocities = self._backend.read_joint_velocities()
+                efforts = self._backend.read_joint_efforts()
+                self.joint_state.publish(
+                    JointState(
+                        frame_id=self.frame_id,
+                        name=names,
+                        position=positions,
+                        velocity=velocities,
+                        effort=efforts,
+                    )
+                )
             next_tick += period
             sleep_for = next_tick - time.monotonic()
             if sleep_for > 0:
@@ -210,22 +224,12 @@ class SimulationModule(Module[SimulationModuleConfig]):
                 pass
             else:
                 dof = self._backend.get_dof()
-                names = self._resolve_joint_names(dof)
+                self._resolve_joint_names(dof)
                 positions = self._backend.read_joint_positions()
-                velocities = self._backend.read_joint_velocities()
-                efforts = self._backend.read_joint_efforts()
+                self._backend.read_joint_velocities()
+                self._backend.read_joint_efforts()
                 state = self._backend.read_state()
                 error_code, _ = self._backend.read_error()
-
-                self.joint_state.publish(
-                    JointState(
-                        frame_id=self.frame_id,
-                        name=names,
-                        position=positions,
-                        velocity=velocities,
-                        effort=efforts,
-                    )
-                )
                 self.robot_state.publish(
                     RobotState(
                         state=state.get("state", 0),

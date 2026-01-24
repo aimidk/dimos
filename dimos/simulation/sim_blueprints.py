@@ -25,7 +25,7 @@ from dimos.utils.data import get_data
 
 xarm7_trajectory_sim = simulation(
     engine="mujoco",
-    config_path=str(get_data("xarm7") / "scene.xml"),
+    config_path=get_data("xarm7") / "scene.xml",
     headless=False,
 ).transports(
     {
