@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SimulationModuleConfig(ModuleConfig):
     engine: EngineType
     config_path: Path
@@ -83,39 +83,12 @@ class SimulationModule(Module[SimulationModuleConfig]):
             raise RuntimeError("Failed to connect to simulation backend")
         self._backend.write_enable(True)
 
-        try:
-            if (
-                self.joint_position_command.connection is not None
-                or self.joint_position_command._transport is not None
-            ):
-                self._disposables.add(
-                    Disposable(
-                        self.joint_position_command.subscribe(self._on_joint_position_command)
-                    )
-                )
-        except Exception as exc:
-            import logging
-
-            logging.getLogger(self.__class__.__name__).warning(
-                f"Failed to subscribe joint_position_command: {exc}"
-            )
-
-        try:
-            if (
-                self.joint_velocity_command.connection is not None
-                or self.joint_velocity_command._transport is not None
-            ):
-                self._disposables.add(
-                    Disposable(
-                        self.joint_velocity_command.subscribe(self._on_joint_velocity_command)
-                    )
-                )
-        except Exception as exc:
-            import logging
-
-            logging.getLogger(self.__class__.__name__).warning(
-                f"Failed to subscribe joint_velocity_command: {exc}"
-            )
+        self._disposables.add(
+            Disposable(self.joint_position_command.subscribe(self._on_joint_position_command))
+        )
+        self._disposables.add(
+            Disposable(self.joint_velocity_command.subscribe(self._on_joint_velocity_command))
+        )
 
         self._stop_event.clear()
         self._control_thread = threading.Thread(
