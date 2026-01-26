@@ -14,4 +14,4 @@
 
 from pathlib import Path
 
-LAUNCHER_PATH = Path(__file__).parent / "mujoco_process.py"
+LAUNCHER_PATH = Path(__file__).parent / "mujoco_subprocess.py"

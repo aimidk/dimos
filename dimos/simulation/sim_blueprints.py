@@ -26,16 +26,11 @@ from dimos.msgs.trajectory_msgs import JointTrajectory
 from dimos.simulation.manipulators.sim_module import simulation
 from dimos.utils.data import get_data
 
-_headless = sys.platform != "darwin"  # mjpython viewer runs reliably in a subprocess on macOS
-
-xarm7_trajectory_sim = autoconnect(
-    simulation(
-        engine="mujoco",
-        config_path=lambda: get_data("xarm7")
-        / "scene.xml",  # avoid triggering LFS downloads during tests
-        headless=_headless,
-    ),
-    human_input(),
+xarm7_trajectory_sim = simulation(
+    engine="mujoco",
+    config_path=lambda: get_data("xarm7")
+    / "scene.xml",  # avoid triggering LFS downloads during tests
+    headless=False,
 ).transports(
     {
         ("joint_state", JointState): LCMTransport("/xarm/joint_states", JointState),
