@@ -22,7 +22,6 @@ from dimos.protocol.pubsub.encoders import (
     LCMEncoderMixin,
     PickleEncoderMixin,
 )
-from dimos.protocol.pubsub.patterns import RegexSubscribable
 from dimos.protocol.pubsub.spec import PubSub
 from dimos.protocol.service.lcmservice import (
     LCMConfig,
@@ -52,7 +51,7 @@ class Topic:
         return f"{self.topic}#{self.lcm_type.msg_name}"
 
 
-class LCMPubSubBase(RegexSubscribable[bytes, str], LCMService, PubSub[Topic, Any]):
+class LCMPubSubBase(LCMService, PubSub[Topic, Any]):
     """LCM-based PubSub with native regex subscription support.
 
     LCM natively supports regex patterns in subscribe(), so we implement
