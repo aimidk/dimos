@@ -30,7 +30,6 @@ all_blueprints = {
     "demo-google-maps-skill": "dimos.agents.skills.demo_google_maps_skill:demo_google_maps_skill",
     "demo-gps-nav": "dimos.agents.skills.demo_gps_nav:demo_gps_nav",
     "demo-object-scene-registration": "dimos.perception.demo_object_scene_registration:demo_object_scene_registration",
-    "simulation-xarm7": "dimos.simulation.sim_blueprints:xarm7_trajectory_sim",
     "demo-osm": "dimos.mapping.osm.demo_osm:demo_osm",
     "demo-skill": "dimos.agents.skills.demo_skill:demo_skill",
     "unitree-g1": "dimos.robot.unitree_webrtc.unitree_g1_blueprints:unitree_g1",
@@ -54,6 +53,7 @@ all_blueprints = {
     "unitree-go2-spatial": "dimos.robot.unitree_webrtc.unitree_go2_blueprints:unitree_go2_spatial",
     "unitree-go2-temporal-memory": "dimos.robot.unitree_webrtc.unitree_go2_blueprints:unitree_go2_temporal_memory",
     "unitree-go2-vlm-stream-test": "dimos.robot.unitree_webrtc.unitree_go2_blueprints:unitree_go2_vlm_stream_test",
+    "xarm7-trajectory-sim": "dimos.simulation.sim_blueprints:xarm7_trajectory_sim",
 }
 
 
@@ -89,6 +89,7 @@ all_modules = {
     "replanning_a_star_planner": "dimos.navigation.replanning_a_star.module",
     "rerun_scene_wiring": "dimos.dashboard.rerun_scene_wiring",
     "ros_nav": "dimos.navigation.rosnav",
+    "simulation": "dimos.simulation.manipulators.sim_module",
     "spatial_memory": "dimos.perception.spatial_perception",
     "speak_skill": "dimos.agents.skills.speak_skill",
     "temporal_memory": "dimos.perception.experimental.temporal_memory.temporal_memory",
@@ -99,8 +100,6 @@ all_modules = {
     "voxel_mapper": "dimos.mapping.voxels",
     "wavefront_frontier_explorer": "dimos.navigation.frontier_exploration.wavefront_frontier_goal_selector",
     "web_input": "dimos.agents.cli.web",
-    "control_orchestrator": "dimos.control.orchestrator",
-    "simulation": "dimos.simulation.manipulators.sim_module",
     "websocket_vis": "dimos.web.websocket_vis.websocket_vis_module",
     "zed_camera": "dimos.hardware.sensors.camera.zed.camera",
 }
