@@ -40,6 +40,42 @@ Use the same ROS distribution flag as your build:
 ./start.sh --simulation --jazzy   # If built with --jazzy
 ```
 
+**Replay a bagfile:**
+
+Replay recorded ROS bagfiles with the autonomy stack for offline analysis and map generation. Place your bagfiles (`.mcap` or `.db3` format) in the `bagfiles/` directory:
+
+```bash
+mkdir -p bagfiles
+cp /path/to/your/recording.mcap bagfiles/
+```
+
+*Basic usage:*
+
+```bash
+./start.sh --bagfile --humble    # Replay with base autonomy
+./start.sh --bagfile --jazzy     # Use Jazzy distribution
+```
+
+This will prompt you to select a bagfile, launch the autonomy stack (SLAM, terrain analysis, local planner), start RViz2 and Foxglove Bridge (port 8765), and play the bagfile with simulated clock.
+
+*Playback options:*
+
+```bash
+./start.sh --bagfile --jazzy -r 2.0              # 2x playback speed
+./start.sh --bagfile --jazzy --save              # Save /explored_areas to PLY file
+./start.sh --bagfile --exploration-planner --jazzy -r 2.0 --save  # Full example
+```
+
+The `--save` option exports the `/explored_areas` point cloud to `bagfiles/<bagfile_name>_explored_<timestamp>.ply`.
+
+*Recovering corrupted bagfiles:* If a `.mcap` file was not properly closed:
+
+```bash
+curl -sL https://github.com/foxglove/mcap/releases/latest/download/mcap-linux-amd64 -o /tmp/mcap
+chmod +x /tmp/mcap
+/tmp/mcap recover bagfiles/corrupted.mcap -o bagfiles/recovered.mcap
+```
+
 <details>
 <summary><h2>Manual build</h2></summary>
 
