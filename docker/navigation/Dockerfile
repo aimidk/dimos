@@ -258,6 +258,11 @@ RUN python3 -m venv /opt/dimos-venv && \
 RUN /opt/dimos-venv/bin/pip install --no-cache-dir \
     -r ${WORKSPACE}/src/vector_perception_ros/requirements.txt
 
+# Pre-download YOLO model weights (avoids runtime download)
+RUN mkdir -p ${WORKSPACE}/src/vector_perception_ros/detect_anything/models && \
+    curl -L -o ${WORKSPACE}/src/vector_perception_ros/detect_anything/models/yoloe-11l-seg.pt \
+    https://github.com/ultralytics/assets/releases/download/v8.4.0/yoloe-11l-seg.pt
+
 # Build vector_perception_ros packages (Python-only, needs venv active)
 # Note: Don't use --symlink-install here as it breaks console_scripts entry points
 RUN /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && \
