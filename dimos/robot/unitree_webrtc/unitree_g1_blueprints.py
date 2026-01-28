@@ -168,19 +168,19 @@ _basic_no_nav_sim = (
 )
 
 if HAS_ROS_NAV and ros_nav is not None:
-    basic_ros = autoconnect(
+    unitree_g1_basic = autoconnect(
         _basic_no_nav_hw,
         g1_connection(),
         ros_nav(),
     )
 else:
     # ROS-free fallback: keep the same blueprint name, but omit the ROS nav module.
-    basic_ros = autoconnect(
+    unitree_g1_basic = autoconnect(
         _basic_no_nav_hw,
         g1_connection(),
     )
 
-basic_sim = autoconnect(
+unitree_g1_basic_sim = autoconnect(
     _basic_no_nav_sim,
     g1_sim_connection(),
     replanning_a_star_planner(),
@@ -192,19 +192,19 @@ _perception_and_memory = autoconnect(
     utilization(),
 )
 
-standard = autoconnect(
-    basic_ros,
+unitree_g1 = autoconnect(
+    unitree_g1_basic,
     _perception_and_memory,
 ).global_config(n_dask_workers=8)
 
-standard_sim = autoconnect(
-    basic_sim,
+unitree_g1_sim = autoconnect(
+    unitree_g1_basic_sim,
     _perception_and_memory,
 ).global_config(n_dask_workers=8)
 
 # Optimized configuration using shared memory for images
-standard_with_shm = autoconnect(
-    standard.transports(
+unitree_g1_shm = autoconnect(
+    unitree_g1.transports(
         {
             ("color_image", Image): pSHMTransport(
                 "/g1/color_image", default_capacity=DEFAULT_CAPACITY_COLOR_IMAGE
@@ -226,26 +226,26 @@ _agentic_skills = autoconnect(
 )
 
 # Full agentic configuration with LLM and skills
-agentic = autoconnect(
-    standard,
+unitree_g1_agentic = autoconnect(
+    unitree_g1,
     _agentic_skills,
 )
 
-agentic_sim = autoconnect(
-    standard_sim,
+unitree_g1_agentic_sim = autoconnect(
+    unitree_g1_sim,
     _agentic_skills,
 )
 
 # Configuration with joystick control for teleoperation
-with_joystick = autoconnect(
-    basic_ros,
+unitree_g1_joystick = autoconnect(
+    unitree_g1_basic,
     keyboard_teleop(),  # Pygame-based joystick control
 )
 
 # Detection configuration with person tracking and 3D detection
-detection = (
+unitree_g1_detection = (
     autoconnect(
-        basic_ros,
+        unitree_g1_basic,
         # Person detection modules with YOLO
         detection3d_module(
             camera_info=zed.CameraInfo.SingleWebcam,
@@ -322,8 +322,8 @@ detection = (
 )
 
 # Full featured configuration with everything
-full_featured = autoconnect(
-    standard_with_shm,
+unitree_g1_full = autoconnect(
+    unitree_g1_shm,
     _agentic_skills,
     keyboard_teleop(),
 )

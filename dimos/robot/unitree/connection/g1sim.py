@@ -27,7 +27,7 @@ from dimos.msgs.geometry_msgs import (
     Twist,
     Vector3,
 )
-from dimos.robot.unitree_webrtc.type.lidar import LidarMessage
+from dimos.msgs.sensor_msgs import PointCloud2
 from dimos.robot.unitree_webrtc.type.odometry import Odometry as SimOdometry
 from dimos_lcm.std_msgs import Bool, String  # type: ignore[import-untyped]
 from dimos.utils.logging_config import setup_logger
@@ -43,7 +43,7 @@ class G1SimConnection(Module):
     policy_enable: In[Bool]
     policy_estop: In[Bool]
     policy_params_json: In[String]
-    lidar: Out[LidarMessage]
+    lidar: Out[PointCloud2]
     odom: Out[PoseStamped]
     ip: str | None
     _global_config: GlobalConfig

@@ -13,7 +13,6 @@ from dimos.core.module import Module, ModuleBase, ModuleConfig, ModuleConfigT
 from dimos.core.rpc_client import RPCClient
 from dimos.core.stream import In, Out, RemoteIn, RemoteOut, Transport
 from dimos.core.transport import (
-    DDSTransport,
     LCMTransport,
     SHMTransport,
     ZenohTransport,
@@ -32,7 +31,6 @@ __all__ = [
     "LCMRPC",
     "LCMTF",
     "TF",
-    "DDSTransport",
     "DimosCluster",
     "In",
     "LCMTransport",
@@ -179,7 +177,7 @@ def patchdask(dask_client: Client, local_cluster: LocalCluster) -> DimosCluster:
             from dimos.protocol.pubsub import shmpubsub
 
             for obj in gc.get_objects():
-                if isinstance(obj, shmpubsub.SharedMemory | shmpubsub.PickleSharedMemory):
+                if isinstance(obj, shmpubsub.SharedMemoryPubSubBase):
                     try:
                         obj.stop()
                     except Exception:

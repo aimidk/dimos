@@ -79,10 +79,10 @@ def load_bundle_json(profile: str) -> dict[str, object] | None:
 
 def get_assets(*, profile: str | None = None) -> dict[str, bytes]:
     data_dir = _get_data_dir()
-    # Assets used from https://sketchfab.com/3d-models/mersus-office-8714be387bcd406898b2615f7dae3a47
-    # Created by Ryan Cassidy and Coleman Costello
     assets: dict[str, bytes] = {}
 
+    # Assets used from https://sketchfab.com/3d-models/mersus-office-8714be387bcd406898b2615f7dae3a47
+    # Created by Ryan Cassidy and Coleman Costello
     # Add all top-level XMLs. Keys must match include paths like "unitree_go1.xml".
     mjx_env.update_assets(assets, data_dir, "*.xml")
 
@@ -127,6 +127,11 @@ def get_assets(*, profile: str | None = None) -> dict[str, bytes]:
     else:
         mjx_env.update_assets(assets, mjx_env.MENAGERIE_PATH / "unitree_go1" / "assets")
         mjx_env.update_assets(assets, mjx_env.MENAGERIE_PATH / "unitree_g1" / "assets")
+
+    # From: https://sketchfab.com/3d-models/jeong-seun-34-42956ca979404a038b8e0d3e496160fd
+    person_dir = epath.Path(str(get_data("person")))
+    mjx_env.update_assets(assets, person_dir, "*.obj")
+    mjx_env.update_assets(assets, person_dir, "*.png")
     return assets
 
 
@@ -237,6 +242,8 @@ def get_model_xml(*, robot: str, scene_xml: str, profile: str | None = None) -> 
     map_elem.set("znear", "0.01")
     map_elem.set("zfar", "10000")
 
+    _add_person_object(root)
+
     return ET.tostring(root, encoding="unicode")
 
 
@@ -279,6 +286,31 @@ def load_model_sdk2(
     model.opt.timestep = sim_dt
 
     return model, data
+def _add_person_object(root: ET.Element) -> None:
+    asset = root.find("asset")
+
+    if asset is None:
+        asset = ET.SubElement(root, "asset")
+
+    ET.SubElement(asset, "mesh", name="person_mesh", file="jeong_seun_34.obj")
+    ET.SubElement(asset, "texture", name="person_texture", file="material_0.png", type="2d")
+    ET.SubElement(asset, "material", name="person_material", texture="person_texture")
+
+    worldbody = root.find("worldbody")
+
+    if worldbody is None:
+        worldbody = ET.SubElement(root, "worldbody")
+
+    person_body = ET.SubElement(worldbody, "body", name="person", pos="0 0 0", mocap="true")
+
+    ET.SubElement(
+        person_body,
+        "geom",
+        type="mesh",
+        mesh="person_mesh",
+        material="person_material",
+        euler="1.5708 0 0",
+    )
 
 
 def load_scene_xml(config: GlobalConfig) -> str:

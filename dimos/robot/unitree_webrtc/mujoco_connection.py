@@ -18,6 +18,7 @@
 # pyright: reportMissingImports=false
 # pyright: reportMissingModuleSource=false
 
+import atexit
 import base64
 from collections.abc import Callable
 import functools
@@ -29,6 +30,7 @@ import sys
 import threading
 import time
 from typing import Any, TypeVar
+import weakref
 
 import numpy as np
 from numpy.typing import NDArray
@@ -38,10 +40,16 @@ from reactivex.disposable import Disposable
 
 from dimos.core.global_config import GlobalConfig
 from dimos.msgs.geometry_msgs import Quaternion, Twist, Vector3
-from dimos.msgs.sensor_msgs import Image, ImageFormat
-from dimos.robot.unitree_webrtc.type.lidar import LidarMessage
+from dimos.msgs.sensor_msgs import CameraInfo, Image, ImageFormat, PointCloud2
 from dimos.robot.unitree_webrtc.type.odometry import Odometry
-from dimos.simulation.mujoco.constants import LAUNCHER_PATH, LIDAR_FPS, VIDEO_FPS
+from dimos.simulation.mujoco.constants import (
+    LAUNCHER_PATH,
+    LIDAR_FPS,
+    VIDEO_CAMERA_FOV,
+    VIDEO_FPS,
+    VIDEO_HEIGHT,
+    VIDEO_WIDTH,
+)
 from dimos.simulation.mujoco.model import load_bundle_json
 from dimos.simulation.mujoco.shared_memory import ShmWriter
 from dimos.utils.data import get_data
@@ -118,6 +126,32 @@ class MujocoConnection:
         self._desired_policy_estop: bool = False
         self._desired_policy_params_json: str = ""
 
+    @staticmethod
+    def _compute_camera_info() -> CameraInfo:
+        """Compute camera intrinsics from MuJoCo camera parameters.
+
+        Uses pinhole camera model: f = height / (2 * tan(fovy / 2))
+        """
+        import math
+
+        fovy = math.radians(VIDEO_CAMERA_FOV)
+        f = VIDEO_HEIGHT / (2 * math.tan(fovy / 2))
+        cx = VIDEO_WIDTH / 2.0
+        cy = VIDEO_HEIGHT / 2.0
+
+        return CameraInfo(
+            frame_id="camera_optical",
+            height=VIDEO_HEIGHT,
+            width=VIDEO_WIDTH,
+            distortion_model="plumb_bob",
+            D=[0.0, 0.0, 0.0, 0.0, 0.0],
+            K=[f, 0.0, cx, 0.0, f, cy, 0.0, 0.0, 1.0],
+            R=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            P=[f, 0.0, cx, 0.0, 0.0, f, cy, 0.0, 0.0, 0.0, 1.0, 0.0],
+        )
+
+    camera_info_static: CameraInfo = _compute_camera_info()
+
     def start(self) -> None:
         self.shm_data = ShmWriter()
 
@@ -128,6 +162,7 @@ class MujocoConnection:
         try:
             # mjpython must be used macOS (because of launch_passive inside mujoco_process.py)
             executable = sys.executable if sys.platform != "darwin" else "mjpython"
+
             self.process = subprocess.Popen(
                 [executable, str(LAUNCHER_PATH), config_pickle, shm_names_json],
             )
@@ -147,6 +182,16 @@ class MujocoConnection:
                 raise RuntimeError(f"MuJoCo process failed to start (exit code {exit_code})")
             if self.shm_data.is_ready():
                 logger.info("MuJoCo process started successfully")
+                # Register atexit handler to ensure subprocess is cleaned up
+                # Use weakref to avoid preventing garbage collection
+                weak_self = weakref.ref(self)
+
+                def cleanup_on_exit() -> None:
+                    instance = weak_self()
+                    if instance is not None:
+                        instance.stop()
+
+                atexit.register(cleanup_on_exit)
                 # Start SDK2 policy runner if configured
                 self._start_sdk2_policy_runner()
                 return
@@ -171,23 +216,48 @@ class MujocoConnection:
             logger.warning(f"No bundle.json found for profile {profile}")
             return
 
-        policy_name = bundle_cfg.get("policy")
-        if not policy_name:
-            logger.info("SDK2 mode: no policy in bundle.json, waiting for external policy")
-            return
+        # Resolve policy path.
+        #
+        # Newer profiles may put the onnx under the bundle directory and omit the "policy" key
+        # (e.g. "policy.onnx" next to model.xml). In that case, auto-detect it so SDK2 mode
+        # still works without requiring users to edit config files.
+        policy_name = (
+            bundle_cfg.get("policy")
+            or bundle_cfg.get("policy_file")
+            or bundle_cfg.get("policy_path")
+        )
 
         robot_type = str(bundle_cfg.get("robot_type", "g1"))
         policy_kind = str(bundle_cfg.get("policy_kind", "mjlab_velocity"))
         policy_config_name = bundle_cfg.get("policy_config")
 
         # Find policy file
-        data_dir = Path(__file__).parent.parent.parent.parent / "data" / "mujoco_sim"   
-        policy_path = data_dir / policy_name
-        if not policy_path.exists():
-            # Try in profile directory
-            policy_path = data_dir / profile / policy_name
-        if not policy_path.exists():
-            logger.warning(f"SDK2 policy not found: {policy_name}")
+        data_dir = Path(str(get_data("mujoco_sim")))
+
+        # Explicit policy in bundle.json.
+        policy_path: Path | None = None
+        if policy_name:
+            policy_path = data_dir / str(policy_name)
+            if not policy_path.exists():
+                policy_path = data_dir / profile / str(policy_name)
+            if not policy_path.exists():
+                policy_path = None
+
+        # Fallback: common bundle-local names.
+        if policy_path is None:
+            for candidate in (
+                data_dir / profile / "policy.onnx",
+                data_dir / f"{profile}_policy.onnx",
+            ):
+                if candidate.exists():
+                    policy_path = candidate
+                    break
+
+        if policy_path is None:
+            logger.info(
+                "SDK2 mode: no policy found for profile; waiting for external policy",
+                profile=profile,
+            )
             return
 
         logger.info(
@@ -390,7 +460,7 @@ class MujocoConnection:
 
         return None
 
-    def get_lidar_message(self) -> LidarMessage | None:
+    def get_lidar_message(self) -> PointCloud2 | None:
         if self.shm_data is None:
             return None
 
@@ -439,7 +509,7 @@ class MujocoConnection:
         return Observable(on_subscribe)
 
     @functools.cache
-    def lidar_stream(self) -> Observable[LidarMessage]:
+    def lidar_stream(self) -> Observable[PointCloud2]:
         return self._create_stream(self.get_lidar_message, LIDAR_FPS, "Lidar")
 
     @functools.cache

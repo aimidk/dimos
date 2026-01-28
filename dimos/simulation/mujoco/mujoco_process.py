@@ -32,9 +32,8 @@ from numpy.typing import NDArray
 import open3d as o3d  # type: ignore[import-untyped]
 
 from dimos.core.global_config import GlobalConfig
-from dimos.msgs.geometry_msgs import Vector3
-from dimos.robot.unitree_webrtc.type.lidar import LidarMessage
-from dimos.simulation.manipulators.constants import (
+from dimos.msgs.sensor_msgs import PointCloud2
+from dimos.simulation.mujoco.constants import (
     LIDAR_FPS,
     LIDAR_RESOLUTION,
     VIDEO_FPS,
@@ -48,6 +47,7 @@ from dimos.simulation.mujoco.model import (
     load_model_sdk2,
     load_scene_xml,
 )
+from dimos.simulation.mujoco.person_on_track import PersonPositionController
 from dimos.simulation.mujoco.shared_memory import ShmReader
 from dimos.utils.logging_config import setup_logger
 
@@ -338,6 +338,8 @@ def _run_simulation(config: GlobalConfig, shm: ShmReader) -> None:
     lidar_left_camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, lidar_left_name)
     lidar_right_camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, lidar_right_name)
 
+    person_position_controller = PersonPositionController(model)
+
     shm.signal_ready()
 
     # Lightweight profiler: log rolling averages of time spent in the MuJoCo subprocess.
@@ -442,6 +444,8 @@ def _run_simulation(config: GlobalConfig, shm: ShmReader) -> None:
             acc_step_s += time.perf_counter() - t0
 
             t0 = time.perf_counter()
+            person_position_controller.tick(data)
+
             m_viewer.sync()
             acc_sync_s += time.perf_counter() - t0
 
@@ -529,11 +533,10 @@ def _run_simulation(config: GlobalConfig, shm: ShmReader) -> None:
                     pcd.points = o3d.utility.Vector3dVector(combined_points)
                     pcd = pcd.voxel_down_sample(voxel_size=LIDAR_RESOLUTION)
 
-                    lidar_msg = LidarMessage(
+                    lidar_msg = PointCloud2(
                         pointcloud=pcd,
                         ts=time.time(),
-                        origin=Vector3(pos[0], pos[1], pos[2]),
-                        resolution=LIDAR_RESOLUTION,
+                        frame_id="world",
                     )
                     acc_pcd_s += time.perf_counter() - t0
                     t0 = time.perf_counter()
@@ -593,6 +596,8 @@ def _run_simulation(config: GlobalConfig, shm: ShmReader) -> None:
                     acc_pcd_s = 0.0
                     acc_lidar_shm_s = 0.0
                     next_report_t = now + profiler_interval_s
+
+        person_position_controller.stop()
 
 
 if __name__ == "__main__":

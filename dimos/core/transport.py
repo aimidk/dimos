@@ -26,10 +26,11 @@ from typing import (
 )
 
 from dimos.core.stream import In, Out, Stream, Transport
-from dimos.protocol.pubsub.ddspubsub import DDS, Topic as DDSTopic
+from dimos.msgs.protocol import DimosMsg
 from dimos.protocol.pubsub.jpeg_shm import JpegSharedMemory
 from dimos.protocol.pubsub.lcmpubsub import LCM, JpegLCM, PickleLCM, Topic as LCMTopic
-from dimos.protocol.pubsub.shmpubsub import PickleSharedMemory, SharedMemory
+from dimos.protocol.pubsub.rospubsub import DimosROS, ROSTopic
+from dimos.protocol.pubsub.shmpubsub import BytesSharedMemory, PickleSharedMemory
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -63,8 +64,7 @@ class pLCMTransport(PubSubTransport[T]):
 
     def broadcast(self, _: Out[T] | None, msg: T) -> None:
         if not self._started:
-            self.lcm.start()
-            self._started = True
+            self.start()
 
         self.lcm.publish(self.topic, msg)
 
@@ -72,14 +72,16 @@ class pLCMTransport(PubSubTransport[T]):
         self, callback: Callable[[T], Any], selfstream: Stream[T] | None = None
     ) -> Callable[[], None]:
         if not self._started:
-            self.lcm.start()
-            self._started = True
+            self.start()
         return self.lcm.subscribe(self.topic, lambda msg, topic: callback(msg))
 
-    def start(self) -> None: ...
+    def start(self) -> None:
+        self.lcm.start()
+        self._started = True
 
     def stop(self) -> None:
         self.lcm.stop()
+        self._started = False
 
 
 class LCMTransport(PubSubTransport[T]):
@@ -90,25 +92,26 @@ class LCMTransport(PubSubTransport[T]):
         if not hasattr(self, "lcm"):
             self.lcm = LCM(**kwargs)
 
-    def start(self) -> None: ...
+    def start(self) -> None:
+        self.lcm.start()
+        self._started = True
 
     def stop(self) -> None:
         self.lcm.stop()
+        self._started = False
 
     def __reduce__(self):  # type: ignore[no-untyped-def]
         return (LCMTransport, (self.topic.topic, self.topic.lcm_type))
 
     def broadcast(self, _, msg) -> None:  # type: ignore[no-untyped-def]
         if not self._started:
-            self.lcm.start()
-            self._started = True
+            self.start()
 
         self.lcm.publish(self.topic, msg)
 
     def subscribe(self, callback: Callable[[T], None], selfstream: In[T] = None) -> None:  # type: ignore[assignment, override]
         if not self._started:
-            self.lcm.start()
-            self._started = True
+            self.start()
         return self.lcm.subscribe(self.topic, lambda msg, topic: callback(msg))  # type: ignore[return-value]
 
 
@@ -120,10 +123,13 @@ class JpegLcmTransport(LCMTransport):  # type: ignore[type-arg]
     def __reduce__(self):  # type: ignore[no-untyped-def]
         return (JpegLcmTransport, (self.topic.topic, self.topic.lcm_type))
 
-    def start(self) -> None: ...
+    def start(self) -> None:
+        self.lcm.start()
+        self._started = True
 
     def stop(self) -> None:
         self.lcm.stop()
+        self._started = False
 
 
 class pSHMTransport(PubSubTransport[T]):
@@ -138,21 +144,22 @@ class pSHMTransport(PubSubTransport[T]):
 
     def broadcast(self, _, msg) -> None:  # type: ignore[no-untyped-def]
         if not self._started:
-            self.shm.start()
-            self._started = True
+            self.start()
 
         self.shm.publish(self.topic, msg)
 
     def subscribe(self, callback: Callable[[T], None], selfstream: In[T] = None) -> None:  # type: ignore[assignment, override]
         if not self._started:
-            self.shm.start()
-            self._started = True
+            self.start()
         return self.shm.subscribe(self.topic, lambda msg, topic: callback(msg))  # type: ignore[return-value]
 
-    def start(self) -> None: ...
+    def start(self) -> None:
+        self.shm.start()
+        self._started = True
 
     def stop(self) -> None:
         self.shm.stop()
+        self._started = False
 
 
 class SHMTransport(PubSubTransport[T]):
@@ -160,28 +167,29 @@ class SHMTransport(PubSubTransport[T]):
 
     def __init__(self, topic: str, **kwargs) -> None:  # type: ignore[no-untyped-def]
         super().__init__(topic)
-        self.shm = SharedMemory(**kwargs)
+        self.shm = BytesSharedMemory(**kwargs)
 
     def __reduce__(self):  # type: ignore[no-untyped-def]
         return (SHMTransport, (self.topic,))
 
     def broadcast(self, _, msg) -> None:  # type: ignore[no-untyped-def]
         if not self._started:
-            self.shm.start()
-            self._started = True
+            self.start()
 
         self.shm.publish(self.topic, msg)
 
     def subscribe(self, callback: Callable[[T], None], selfstream: In[T] | None = None) -> None:  # type: ignore[override]
         if not self._started:
-            self.shm.start()
-            self._started = True
+            self.start()
         return self.shm.subscribe(self.topic, lambda msg, topic: callback(msg))  # type: ignore[arg-type, return-value]
 
-    def start(self) -> None: ...
+    def start(self) -> None:
+        self.shm.start()
+        self._started = True
 
     def stop(self) -> None:
         self.shm.stop()
+        self._started = False
 
 
 class JpegShmTransport(PubSubTransport[T]):
@@ -197,50 +205,57 @@ class JpegShmTransport(PubSubTransport[T]):
 
     def broadcast(self, _, msg) -> None:  # type: ignore[no-untyped-def]
         if not self._started:
-            self.shm.start()
-            self._started = True
+            self.start()
 
         self.shm.publish(self.topic, msg)
 
     def subscribe(self, callback: Callable[[T], None], selfstream: In[T] | None = None) -> None:  # type: ignore[override]
         if not self._started:
-            self.shm.start()
-            self._started = True
+            self.start()
         return self.shm.subscribe(self.topic, lambda msg, topic: callback(msg))  # type: ignore[arg-type, return-value]
 
-    def start(self) -> None: ...
-
-    def stop(self) -> None: ...
-
-
-class DDSTransport(PubSubTransport[T]):
-    _started: bool = False
-
-    def __init__(self, topic: str, type: type, **kwargs) -> None:  # type: ignore[no-untyped-def]
-        super().__init__(DDSTopic(topic, type))
-        if not hasattr(self, "dds"):
-            self.dds = DDS(**kwargs)
-
     def start(self) -> None:
-        self.dds.start()
+        self.shm.start()
         self._started = True
 
     def stop(self) -> None:
-        self.dds.stop()
+        self.shm.stop()
         self._started = False
 
-    def __reduce__(self):  # type: ignore[no-untyped-def]
-        return (DDSTransport, (self.topic.topic, self.topic.dds_type))
 
-    def broadcast(self, _, msg) -> None:  # type: ignore[no-untyped-def]
-        if not self._started:
-            self.start()
-        self.dds.publish(self.topic, msg)
+class ROSTransport(PubSubTransport[DimosMsg]):
+    _ros: DimosROS | None = None
 
-    def subscribe(self, callback: Callable[[T], None], selfstream: In[T] = None) -> None:  # type: ignore[assignment, override]
-        if not self._started:
+    def __init__(self, topic: str, msg_type: type[DimosMsg], **kwargs: Any) -> None:
+        super().__init__(ROSTopic(topic, msg_type))
+        self._kwargs = kwargs
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (ROSTransport, (self.topic.topic, self.topic.msg_type))
+
+    def broadcast(self, _: Out[DimosMsg], msg: DimosMsg) -> None:
+        if self._ros is None:
             self.start()
-        return self.dds.subscribe(self.topic, lambda msg, topic: callback(msg))  # type: ignore[return-value]
+            assert self._ros is not None  # for type narrowing
+        self._ros.publish(self.topic, msg)
+
+    def subscribe(
+        self, callback: Callable[[DimosMsg], Any], selfstream: Stream[DimosMsg] | None = None
+    ) -> Callable[[], None]:
+        if self._ros is None:
+            self.start()
+            assert self._ros is not None  # for type narrowing
+        return self._ros.subscribe(self.topic, lambda msg, topic: callback(msg))
+
+    def start(self) -> None:
+        if self._ros is None:
+            self._ros = DimosROS(**self._kwargs)
+            self._ros.start()
+
+    def stop(self) -> None:
+        if self._ros is not None:
+            self._ros.stop()
+            self._ros = None
 
 
 class ZenohTransport(PubSubTransport[T]): ...
