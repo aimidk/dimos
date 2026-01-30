@@ -3,7 +3,7 @@ from __future__ import annotations
 import multiprocessing as mp
 import signal
 import time
-from typing import TYPE_CHECKING, TypeAlias, cast
+from typing import TYPE_CHECKING, cast
 
 from dask.distributed import Client, LocalCluster
 from rich.console import Console
