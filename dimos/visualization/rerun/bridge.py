@@ -88,6 +88,7 @@ ViewerMode = Literal["native", "web", "none"]
 # automatically spy an all the transports and read visualization hints
 #
 # this is the correct implementation.
+#
 # temporarily we are using these "sideloading" converters={} to define custom to_rerun methods for specific topics
 # as well as pubsubs to specify which protocols to listen to.
 

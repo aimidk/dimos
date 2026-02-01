@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import platform
 
 from dimos_lcm.foxglove_msgs.ImageAnnotations import (
     ImageAnnotations,  # type: ignore[import-untyped]
@@ -31,7 +30,7 @@ from dimos.agents.skills.speak_skill import speak_skill
 from dimos.agents.spec import Provider
 from dimos.agents.vlm_agent import vlm_agent
 from dimos.agents.vlm_stream_tester import vlm_stream_tester
-from dimos.constants import DEFAULT_CAPACITY_COLOR_IMAGE
+from dimos.core.base_blueprints import base_blueprint
 from dimos.core.blueprints import autoconnect
 from dimos.core.global_config import GlobalConfig
 from dimos.core.transport import (
@@ -39,7 +38,6 @@ from dimos.core.transport import (
     JpegShmTransport,
     LCMTransport,
     ROSTransport,
-    pSHMTransport,
 )
 from dimos.mapping.costmapper import cost_mapper
 from dimos.mapping.voxels import voxel_mapper
@@ -60,41 +58,14 @@ from dimos.robot.foxglove_bridge import foxglove_bridge
 from dimos.robot.unitree.connection.go2 import GO2Connection, go2_connection
 from dimos.robot.unitree_webrtc.unitree_skill_container import unitree_skills
 from dimos.utils.monitoring import utilization
-from dimos.visualization.rerun.bridge import rerun_bridge
 from dimos.web.websocket_vis.websocket_vis_module import websocket_vis
 
 _config = GlobalConfig()
 
 
-# This stuff (also for viewer) needs to be in some shared base blueprints file
-# I just want to start from Base here in go2
-
-# Mac has some issue with high bandwidth UDP, so we use pSHMTransport for color_image
-_mac_transports: dict[tuple[str, type], pSHMTransport[Image]] = {
-    ("color_image", Image): pSHMTransport(
-        "color_image", default_capacity=DEFAULT_CAPACITY_COLOR_IMAGE
-    ),
-}
-
-
-if _config.viewer_backend == "foxglove":
-    _mac = autoconnect(
-        foxglove_bridge(shm_channels=["/color_image#sensor_msgs.Image"]),
-    ).transports(_mac_transports)
-    _linux = autoconnect(foxglove_bridge())
-elif _config.viewer_backend == "rerun":
-    _mac = autoconnect(rerun_bridge(viewer_mode="native")).transports(_mac_transports)
-    _linux = autoconnect(rerun_bridge(viewer_mode="native"))
-elif _config.viewer_backend == "rerun-web":
-    _mac = autoconnect(rerun_bridge(viewer_mode="web")).transports(_mac_transports)
-    _linux = autoconnect(rerun_bridge(viewer_mode="web"))
-else:  # "none"
-    _mac = autoconnect().transports(_mac_transports)
-    _linux = autoconnect()
-
 unitree_go2_basic = autoconnect(
+    base_blueprint,
     go2_connection(),
-    _linux if platform.system() == "Linux" else _mac,
     websocket_vis(),
 ).global_config(n_dask_workers=4, robot_model="unitree_go2")
 
