@@ -24,7 +24,6 @@ from dimos.core import (
     Out,
     pLCMTransport,
     rpc,
-    start,
 )
 from dimos.core.testing import MockRobotClient, dimos
 from dimos.msgs.geometry_msgs import Vector3
@@ -138,8 +137,3 @@ def test_basic_deployment(dimos) -> None:
     assert nav.lidar_msg_count >= 8
 
     dimos.shutdown()
-
-
-if __name__ == "__main__":
-    client = start(1)  # single process for CI memory
-    test_deployment(client)
