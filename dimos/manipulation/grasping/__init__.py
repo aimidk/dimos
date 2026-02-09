@@ -37,15 +37,15 @@ from dimos.manipulation.grasping.pickplace_module import (
 )
 
 __all__ = [
+    # PickPlace (agent-facing orchestration)
+    "FailureCode",
     # GraspGen (Docker neural net)
     "GraspGenConfig",
     "GraspGenModule",
-    "graspgen",
-    # PickPlace (agent-facing orchestration)
-    "FailureCode",
     "PickPlaceModule",
     "PickPlaceModuleConfig",
     "PickResult",
     "PickStatus",
+    "graspgen",
     "pickplace_module",
 ]

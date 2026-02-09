@@ -30,11 +30,10 @@ The VLM/agent only calls high-level skills; all low-level operations
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum
 import threading
 import time
-from collections.abc import Generator
-from dataclasses import dataclass, field
-from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from dimos.core import Module, Out, rpc
@@ -43,6 +42,8 @@ from dimos.protocol.skill.skill import skill
 from dimos.utils.logging_config import setup_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from dimos.msgs.geometry_msgs import Pose, PoseArray
     from dimos.msgs.sensor_msgs import PointCloud2
 
