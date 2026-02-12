@@ -22,6 +22,7 @@ from dimos.hardware.sensors.lidar.livox.mid360 import LivoxMid360
 from dimos.hardware.sensors.lidar.livox.module import LivoxLidarModule
 from dimos.msgs.sensor_msgs.Imu import Imu
 from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
+from dimos.visualization.rerun.bridge import RerunBridgeModule
 
 pc_count = 0
 imu_count = 0
@@ -54,13 +55,23 @@ class LidarListener(Module):
 
 
 if __name__ == "__main__":
-    dimos = start(2)
+    dimos = start(3)
 
     lidar = dimos.deploy(
         LivoxLidarModule,
-        hardware=lambda: LivoxMid360(host_ip="192.168.1.5", lidar_ips=["192.168.1.155"]),
+        hardware=lambda: LivoxMid360(
+            host_ip="192.168.1.5",
+            lidar_ips=["192.168.1.155"],
+            frequency=1.0,  # , voxel_size=0.25
+        ),
     )
     listener = dimos.deploy(LidarListener)
+    bridge = dimos.deploy(
+        RerunBridgeModule,
+        visual_override={
+            # "world/lidar/pointcloud": lambda pc: pc.to_rerun(mode="boxes", voxel_size=0.25),
+        },
+    )
 
     lidar.pointcloud.transport = LCMTransport("/lidar/pointcloud", PointCloud2)
     lidar.imu.transport = LCMTransport("/lidar/imu", Imu)
@@ -69,6 +80,7 @@ if __name__ == "__main__":
 
     lidar.start()
     listener.start()
+    bridge.start()
 
     print("LivoxLidarModule + listener running. Ctrl+C to stop.", flush=True)
     try:

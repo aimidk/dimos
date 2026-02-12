@@ -68,7 +68,7 @@ class LivoxMid360Config(LidarConfig):
 
     host_ip: str = "192.168.1.5"
     lidar_ips: list[str] = field(default_factory=lambda: ["192.168.1.155"])
-    frequency: float = 10.0  # Hz, point cloud output rate
+    frequency: float = 5.0  # Hz, point cloud output rate
     frame_id: str = "lidar_link"
     frame_id_prefix: str | None = None
     enable_imu: bool = True
@@ -85,6 +85,9 @@ class LivoxMid360Config(LidarConfig):
     host_point_data_port: int = 56301
     host_imu_data_port: int = 56401
     host_log_data_port: int = 56501
+
+    # Voxel downsampling size in meters (None = no downsampling)
+    voxel_size: float | None = None
 
     # Socket buffer size (bytes) to avoid packet loss at high data rates
     recv_buf_size: int = 4 * 1024 * 1024  # 4 MB
@@ -333,6 +336,10 @@ class LivoxMid360(LidarHardware["LivoxMid360Config"]):
             all_reflectivities.astype(np.float32).reshape(-1, 1) / 255.0,
             dtype=o3c.float32,
         )
+
+        # Optional voxel downsampling
+        if self.config.voxel_size is not None:
+            pcd_t = pcd_t.voxel_down_sample(self.config.voxel_size)
 
         pc2 = PointCloud2(
             pointcloud=pcd_t,

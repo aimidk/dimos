@@ -247,6 +247,11 @@ class RerunBridgeModule(Module):
         else:
             rr.log(entity_path, cast("Archetype", rerun_data))
 
+        # # Connect entity to its TF frame so transforms apply correctly
+        # frame_id = getattr(msg, "frame_id", None)
+        # if frame_id and not is_rerun_multi(rerun_data):
+        #     rr.log(entity_path, rr.Transform3D(parent_frame="tf#/" + frame_id))
+
     @rpc
     def start(self) -> None:
         import rerun as rr
