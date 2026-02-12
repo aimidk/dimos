@@ -1,0 +1,168 @@
+# Copyright 2026 Dimensional Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Tests for NativeModule: blueprint wiring, topic collection, CLI arg generation.
+
+Every test launches the real native_echo.py subprocess via blueprint.build().
+The echo script writes received CLI args to a temp file for assertions.
+"""
+
+from dataclasses import dataclass
+import json
+import os
+from pathlib import Path
+import tempfile
+import time
+
+import pytest
+
+from dimos.core.blueprints import autoconnect
+from dimos.core.core import rpc
+from dimos.core.module import Module
+from dimos.core.native_module import LogFormat, NativeModule, NativeModuleConfig
+from dimos.core.stream import In, Out
+from dimos.core.transport import LCMTransport
+from dimos.msgs.geometry_msgs.Twist import Twist
+from dimos.msgs.sensor_msgs.Imu import Imu
+from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
+
+_ECHO = str(Path(__file__).parent / "native_echo.py")
+
+
+@pytest.fixture
+def args_file():
+    """Temp file where native_echo.py writes the CLI args it received."""
+    fd, path = tempfile.mkstemp(suffix=".json", prefix="native_echo_")
+    os.close(fd)
+    os.unlink(path)
+    try:
+        yield path
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)
+
+
+def read_json_file(path: str) -> dict[str, str]:
+    """Read and parse --key value pairs from the echo output file."""
+    raw: list[str] = json.loads(Path(path).read_text())
+    result = {}
+    i = 0
+    while i < len(raw):
+        if raw[i].startswith("--") and i + 1 < len(raw):
+            result[raw[i][2:]] = raw[i + 1]
+            i += 2
+        else:
+            i += 1
+    return result
+
+
+# -- Test modules --
+
+
+@dataclass(kw_only=True)
+class StubNativeConfig(NativeModuleConfig):
+    executable: str = _ECHO
+    log_format: LogFormat = LogFormat.JSON
+    some_param: float = 1.5
+
+
+class StubNativeModule(NativeModule):
+    default_config = StubNativeConfig
+    pointcloud: Out[PointCloud2]
+    imu: Out[Imu]
+    cmd_vel: In[Twist]
+
+    def _build_extra_args(self) -> list[str]:
+        cfg: StubNativeConfig = self.config  # type: ignore[assignment]
+        return ["--some_param", str(cfg.some_param)]
+
+
+class StubConsumer(Module):
+    pointcloud: In[PointCloud2]
+    imu: In[Imu]
+
+    @rpc
+    def start(self) -> None:
+        pass
+
+
+class StubProducer(Module):
+    cmd_vel: Out[Twist]
+
+    @rpc
+    def start(self) -> None:
+        pass
+
+
+def test_manual(dimos_cluster, args_file) -> None:
+    native_module = dimos_cluster.deploy(
+        StubNativeModule,
+        some_param=2.5,
+        extra_env={"NATIVE_ECHO_OUTPUT": args_file},
+    )
+
+    native_module.pointcloud.transport = LCMTransport("/my/custom/lidar", PointCloud2)
+    native_module.cmd_vel.transport = LCMTransport("/cmd_vel", Twist)
+    native_module.start()
+    time.sleep(1)
+    native_module.stop()
+
+    assert read_json_file(args_file) == {
+        "cmd_vel": "/cmd_vel#geometry_msgs.Twist",
+        "pointcloud": "/my/custom/lidar#sensor_msgs.PointCloud2",
+        "some_param": "2.5",
+    }
+
+
+def test_autoconnect(args_file) -> None:
+    """autoconnect passes correct topic args to the native subprocess."""
+    blueprint = autoconnect(
+        StubNativeModule.blueprint(
+            some_param=2.5,
+            extra_env={"NATIVE_ECHO_OUTPUT": args_file},
+        ),
+        StubConsumer.blueprint(),
+        StubProducer.blueprint(),
+    ).transports(
+        {
+            ("pointcloud", PointCloud2): LCMTransport("/my/custom/lidar", PointCloud2),
+        },
+    )
+
+    coordinator = blueprint.global_config(viewer_backend="none").build()
+    try:
+        # Validate blueprint wiring: all modules deployed
+        native = coordinator.get_instance(StubNativeModule)
+        consumer = coordinator.get_instance(StubConsumer)
+        producer = coordinator.get_instance(StubProducer)
+        assert native is not None
+        assert consumer is not None
+        assert producer is not None
+
+        # Out→In topics match between connected modules
+        assert native.pointcloud.transport.topic == consumer.pointcloud.transport.topic
+        assert native.imu.transport.topic == consumer.imu.transport.topic
+        assert producer.cmd_vel.transport.topic == native.cmd_vel.transport.topic
+
+        # Custom transport was applied
+        assert native.pointcloud.transport.topic == "/my/custom/lidar"
+    finally:
+        coordinator.stop()
+
+    assert read_json_file(args_file) == {
+        "cmd_vel": "/cmd_vel#geometry_msgs.Twist",
+        "pointcloud": "/my/custom/lidar#sensor_msgs.PointCloud2",
+        "imu": "/imu#sensor_msgs.Imu",
+        "some_param": "2.5",
+    }

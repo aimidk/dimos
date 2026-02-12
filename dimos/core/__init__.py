@@ -11,6 +11,7 @@ from rich.console import Console
 import dimos.core.colors as colors
 from dimos.core.core import rpc
 from dimos.core.module import Module, ModuleBase, ModuleConfig, ModuleConfigT
+from dimos.core.native_module import LogFormat, NativeModule, NativeModuleConfig
 from dimos.core.rpc_client import RPCClient
 from dimos.core.stream import In, Out, RemoteIn, RemoteOut, Transport
 from dimos.core.transport import (
@@ -39,10 +40,13 @@ __all__ = [
     "DimosCluster",
     "In",
     "LCMTransport",
+    "LogFormat",
     "Module",
     "ModuleBase",
     "ModuleConfig",
     "ModuleConfigT",
+    "NativeModule",
+    "NativeModuleConfig",
     "Out",
     "PubSubTF",
     "RPCSpec",
