@@ -1,12 +1,16 @@
 {
-  description = "Livox SDK2 — driver library for Livox LiDAR sensors";
+  description = "Livox SDK2 and Mid-360 native module";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    dimos-lcm = {
+      url = "github:dimensionalOS/dimos-lcm/main";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, ... }:
+  outputs = { self, nixpkgs, flake-utils, dimos-lcm, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -25,25 +29,41 @@
           nativeBuildInputs = [ pkgs.cmake ];
 
           cmakeFlags = [
-            "-DCMAKE_INSTALL_PREFIX=${placeholder "out"}"
             "-DBUILD_SHARED_LIBS=ON"
             "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
           ];
 
           preConfigure = ''
-            # Skip samples, just build the SDK
             substituteInPlace CMakeLists.txt \
               --replace-fail "add_subdirectory(samples)" ""
-
-            # Fix missing <cstdint> includes for newer GCC
             sed -i '1i #include <cstdint>' sdk_core/comm/define.h
             sed -i '1i #include <cstdint>' sdk_core/logger_handler/file_manager.h
           '';
         };
+
+        mid360_native = pkgs.stdenv.mkDerivation {
+          pname = "mid360_native";
+          version = "0.1.0";
+
+          src = ./cpp;
+
+          nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config ];
+          buildInputs = [ livox-sdk2 pkgs.lcm pkgs.glib ];
+
+          cmakeFlags = [
+            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+            "-DFETCHCONTENT_SOURCE_DIR_DIMOS_LCM=${dimos-lcm}"
+          ];
+
+          installPhase = ''
+            mkdir -p $out/bin
+            cp mid360_native $out/bin/
+          '';
+        };
       in {
         packages = {
-          default = livox-sdk2;
-          inherit livox-sdk2;
+          default = mid360_native;
+          inherit livox-sdk2 mid360_native;
         };
 
         devShells.default = pkgs.mkShell {

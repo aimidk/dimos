@@ -17,6 +17,40 @@
         "type": "github"
       }
     },
+    "dimos-lcm_2": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1769774949,
+        "narHash": "sha256-icRK7jerqNlwK1WZBrnIP04I2WozzFqTD7qsmnPxQuo=",
+        "owner": "dimensionalOS",
+        "repo": "dimos-lcm",
+        "rev": "0aa72b7b1bd3a65f50f5c03485ee9b728df56afe",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dimensionalOS",
+        "ref": "main",
+        "repo": "dimos-lcm",
+        "type": "github"
+      }
+    },
+    "fast-lio": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1770976391,
+        "narHash": "sha256-OjSHk6qs3oCZ7XNjDyq4/K/Rb1VhqyADtra2q3F8V5U=",
+        "owner": "leshy",
+        "repo": "FAST-LIO-NON-ROS",
+        "rev": "47606ac6bbafcae9231936b4662b94c84fe87339",
+        "type": "github"
+      },
+      "original": {
+        "owner": "leshy",
+        "ref": "dimos-integration",
+        "repo": "FAST-LIO-NON-ROS",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -34,6 +68,26 @@
         "repo": "flake-utils",
         "type": "github"
       }
+    },
+    "livox-sdk": {
+      "inputs": {
+        "dimos-lcm": "dimos-lcm_2",
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "path": "../../livox",
+        "type": "path"
+      },
+      "original": {
+        "path": "../../livox",
+        "type": "path"
+      },
+      "parent": []
     },
     "nixpkgs": {
       "locked": {
@@ -54,7 +108,9 @@
     "root": {
       "inputs": {
         "dimos-lcm": "dimos-lcm",
+        "fast-lio": "fast-lio",
         "flake-utils": "flake-utils",
+        "livox-sdk": "livox-sdk",
         "nixpkgs": "nixpkgs"
       }
     },
