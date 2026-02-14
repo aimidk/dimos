@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+# Copyright 2026 Dimensional Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Simple ZED camera test - run AFTER installing ZED SDK."""
 
 import sys
@@ -11,7 +25,8 @@ print("=" * 60)
 print("\n1. Checking ZED SDK Python bindings...")
 try:
     import pyzed.sl as sl
-    print(f"   ✓ pyzed.sl imported successfully")
+
+    print("   ✓ pyzed.sl imported successfully")
 except ImportError as e:
     print(f"   ✗ Cannot import pyzed.sl: {e}")
     print("\n   To fix:")
@@ -65,11 +80,13 @@ print("   ✓ Camera opened successfully!")
 
 # Get camera info
 info = zed.get_camera_information()
-print(f"\n   Camera Info:")
+print("\n   Camera Info:")
 print(f"     Model: {info.camera_model}")
 print(f"     Serial: {info.serial_number}")
 print(f"     Firmware: {info.camera_configuration.firmware_version}")
-print(f"     Resolution: {info.camera_configuration.resolution.width}x{info.camera_configuration.resolution.height}")
+print(
+    f"     Resolution: {info.camera_configuration.resolution.width}x{info.camera_configuration.resolution.height}"
+)
 
 # Grab a few frames
 print("\n4. Capturing test frames...")
@@ -79,9 +96,9 @@ image = sl.Mat()
 for i in range(5):
     if zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
         zed.retrieve_image(image, sl.VIEW.LEFT)
-        print(f"   Frame {i+1}: {image.get_width()}x{image.get_height()}")
+        print(f"   Frame {i + 1}: {image.get_width()}x{image.get_height()}")
     else:
-        print(f"   Frame {i+1}: Failed to grab")
+        print(f"   Frame {i + 1}: Failed to grab")
 
 zed.close()
 

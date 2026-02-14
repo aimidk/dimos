@@ -1,8 +1,22 @@
 #!/usr/bin/env python3
+# Copyright 2026 Dimensional Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """ZED Camera Debug Script - Check what's wrong with ZED setup."""
 
-import sys
 import subprocess
+import sys
 
 print("=" * 60)
 print("ZED CAMERA DEBUG SCRIPT")
@@ -15,10 +29,11 @@ print(f"\n1. Python Version: {sys.version}")
 print("\n2. Checking pyzed installation...")
 try:
     import pyzed.sl as sl
-    print(f"   ✓ pyzed is installed")
+
+    print("   ✓ pyzed is installed")
     print(f"   Version: {sl.__version__ if hasattr(sl, '__version__') else 'unknown'}")
 except ImportError as e:
-    print(f"   ✗ pyzed is NOT installed")
+    print("   ✗ pyzed is NOT installed")
     print(f"   Error: {e}")
     print("\n   To install ZED SDK:")
     print("   1. Download ZED SDK from: https://www.stereolabs.com/developers/release")
@@ -30,11 +45,13 @@ except ImportError as e:
 print("\n3. Checking USB devices...")
 try:
     result = subprocess.run(["lsusb"], capture_output=True, text=True)
-    lines = result.stdout.split('\n')
+    lines = result.stdout.split("\n")
     print(f"   Found {len([l for l in lines if l])} USB devices")
 
     # Look for ZED-specific devices
-    zed_devices = [l for l in lines if 'ZED' in l.upper() or 'STEREO' in l.upper() or '2b03' in l.lower()]
+    zed_devices = [
+        l for l in lines if "ZED" in l.upper() or "STEREO" in l.upper() or "2b03" in l.lower()
+    ]
     if zed_devices:
         print("   ✓ Possible ZED camera found:")
         for dev in zed_devices:
@@ -51,9 +68,11 @@ except Exception as e:
 # 4. Check video devices
 print("\n4. Checking video devices...")
 try:
-    result = subprocess.run(["ls", "-l", "/dev/video*"], capture_output=True, text=True, shell=False)
-    devices = result.stdout.split('\n')
-    video_devs = [d for d in devices if 'video' in d]
+    result = subprocess.run(
+        ["ls", "-l", "/dev/video*"], capture_output=True, text=True, shell=False
+    )
+    devices = result.stdout.split("\n")
+    video_devs = [d for d in devices if "video" in d]
     print(f"   Found {len(video_devs)} video devices:")
     for dev in video_devs[:8]:  # Show first 8
         if dev:
@@ -103,13 +122,15 @@ try:
         print(f"   Model: {info.camera_model}")
         print(f"   Serial: {info.serial_number}")
         print(f"   Firmware: {info.camera_configuration.firmware_version}")
-        print(f"   Resolution: {info.camera_configuration.resolution.width}x{info.camera_configuration.resolution.height}")
+        print(
+            f"   Resolution: {info.camera_configuration.resolution.width}x{info.camera_configuration.resolution.height}"
+        )
 
         zed.close()
     else:
-        print(f"   ✗ Failed to open ZED camera")
+        print("   ✗ Failed to open ZED camera")
         print(f"   Error code: {err}")
-        print(f"   Error message: {str(err)}")
+        print(f"   Error message: {err!s}")
 
         # Provide specific error guidance
         if err == sl.ERROR_CODE.CAMERA_NOT_DETECTED:
@@ -128,6 +149,7 @@ except ImportError:
 except Exception as e:
     print(f"   Error: {e}")
     import traceback
+
     traceback.print_exc()
 
 print("\n" + "=" * 60)

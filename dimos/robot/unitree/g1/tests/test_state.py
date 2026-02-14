@@ -1,17 +1,33 @@
 #!/usr/bin/env python3
+# Copyright 2026 Dimensional Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """
 Query G1 robot state to diagnose issues.
 """
 
 import json
 import time
+
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize
-from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
 from unitree_sdk2py.g1.loco.g1_loco_api import (
+    ROBOT_API_ID_LOCO_GET_BALANCE_MODE,
     ROBOT_API_ID_LOCO_GET_FSM_ID,
     ROBOT_API_ID_LOCO_GET_FSM_MODE,
-    ROBOT_API_ID_LOCO_GET_BALANCE_MODE,
 )
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
 
 def main():
     print("=" * 60)
@@ -92,6 +108,7 @@ def main():
     print("    - Use FSM ID 706 to stand up from squat")
     print("    - Use FSM ID 702 to stand up from lying")
     print("    - Use FSM ID 1 (Damp) before standing if robot is stiff")
+
 
 if __name__ == "__main__":
     main()

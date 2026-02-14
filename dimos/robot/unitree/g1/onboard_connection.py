@@ -62,12 +62,12 @@ def _import_unitree_sdk() -> None:
             ChannelFactoryInitialize,
             ChannelSubscriber,
         )
-        from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
         from unitree_sdk2py.g1.loco.g1_loco_api import (
+            ROBOT_API_ID_LOCO_GET_BALANCE_MODE,
             ROBOT_API_ID_LOCO_GET_FSM_ID,
             ROBOT_API_ID_LOCO_GET_FSM_MODE,
-            ROBOT_API_ID_LOCO_GET_BALANCE_MODE,
         )
+        from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
         from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowState_
 
         globals()["_MotionSwitcherClient"] = MotionSwitcherClient
@@ -414,6 +414,7 @@ class G1OnboardConnection(Resource):
         except Exception as e:
             logger.error(f"AI standup failed: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -443,6 +444,7 @@ class G1OnboardConnection(Resource):
         except Exception as e:
             logger.error(f"Normal standup failed: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -491,7 +493,9 @@ class G1OnboardConnection(Resource):
         def lowstate_to_pose(lowstate: Any) -> Pose:
             # Extract IMU quaternion for orientation
             imu = lowstate.imu_state
-            quat = Quaternion(x=imu.quaternion[0], y=imu.quaternion[1], z=imu.quaternion[2], w=imu.quaternion[3])
+            quat = Quaternion(
+                x=imu.quaternion[0], y=imu.quaternion[1], z=imu.quaternion[2], w=imu.quaternion[3]
+            )
 
             # Position from foot contacts (simplified - would need actual SLAM)
             # For now, return identity position with IMU orientation
