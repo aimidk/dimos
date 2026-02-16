@@ -1,0 +1,49 @@
+name: quickstart-ci
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quickstart-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ubuntu system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            curl \
+            g++ \
+            portaudio19-dev \
+            git-lfs \
+            libturbojpeg \
+            python3-dev \
+            pre-commit
+
+      - name: Quickstart install and test
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+
+          export GIT_LFS_SKIP_SMUDGE=1
+          git lfs install
+
+          uv venv
+          . .venv/bin/activate
+
+          uv pip install -e '.[base,dev,manipulation,misc,unitree,drone]'
+          pre-commit install
+          uv run pytest dimos
