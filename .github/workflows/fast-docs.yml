@@ -2,8 +2,7 @@ name: docs
 
 on:
   pull_request:
-    branches:
-      - master
+      - main
       - dev
     paths:
       - 'docs/**'
