@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# names: stash,yashas,alexl,matt,ivan,pauln,mustafa,jeff,yash,ruthwik,jalaj,jing,miguel,christie,juan,unknown
+# types: feat,fix,chore,refactor,docs
+
+set -euo pipefail
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+
+allowed_names="stash yashas alexl matt ivan pauln mustafa jeff yash ruthwik jalaj jing miguel christie juan unknown"
+allowed_types="feat fix chore refactor docs"
+
+if [[ "$branch" != */*/* ]]; then
+  echo "Invalid branch name: '$branch'"
+  echo "Expected format: <your_name>/<type>/<description>"
+  echo "Allowed names: $allowed_names"
+  echo "Allowed types: $allowed_types"
+  exit 1
+fi
+
+branch_name="${branch%%/*}"
+rest="${branch#*/}"
+branch_type="${rest%%/*}"
+branch_description="${branch#*/*/}"
+
+if [[ -z "$branch_description" || "$branch_description" == "$branch" ]]; then
+  echo "Invalid branch name: '$branch'"
+  echo "Expected format: <your_name>/<type>/<description>"
+  exit 1
+fi
+
+name_ok=0
+for n in $allowed_names; do
+  if [[ "$branch_name" == "$n" ]]; then
+    name_ok=1
+    break
+  fi
+done
+
+type_ok=0
+for t in $allowed_types; do
+  if [[ "$branch_type" == "$t" ]]; then
+    type_ok=1
+    break
+  fi
+done
+
+if [[ "$name_ok" -ne 1 || "$type_ok" -ne 1 ]]; then
+  echo "Invalid branch name: '$branch'"
+  echo "Expected format: <your_name>/<type>/<description>"
+  echo "Parsed name/type: '$branch_name'/'$branch_type'"
+  echo "Allowed names: $allowed_names"
+  echo "Allowed types: $allowed_types"
+  exit 1
+fi
+
+echo "Branch naming check passed: $branch"

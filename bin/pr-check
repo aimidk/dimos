@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+bin/pr-name-check
+
 echo "Ensuring pip versions are correct"
 time uv sync --frozen --extra misc --extra visualization --extra agents --extra web --extra perception --extra unitree --extra manipulation --extra cpu --extra dev --extra sim --extra drone --extra base
 

@@ -43,7 +43,6 @@ dependencies = [
     "python-dotenv",
     "annotation-protocol>=1.4.0",
     "lazy_loader",
-
     # Multiprocess
     "dask[complete]==2025.5.1",
     "plum-dispatch==2.5.7",
@@ -171,7 +170,8 @@ unitree = [
 
 manipulation = [
     # Planning (Drake)
-    "drake>=1.40.0",
+    "drake==1.45.0; sys_platform == 'darwin'",
+    "drake==1.40.0; sys_platform != 'darwin'",
 
     # Hardware SDKs
     "piper-sdk",
