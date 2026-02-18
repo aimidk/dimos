@@ -1,8 +1,52 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 bin/pr-name-check
+
+if git show-ref --verify --quiet refs/heads/dev; then
+  base_ref="dev"
+elif git show-ref --verify --quiet refs/remotes/origin/dev; then
+  base_ref="origin/dev"
+else
+  echo "Could not find 'dev' or 'origin/dev' to compare changes against."
+  exit 1
+fi
+
+declare -A changed_files_map=()
+
+while IFS= read -r file; do
+  [[ -n "$file" ]] && changed_files_map["$file"]=1
+done < <(git diff --name-only "$base_ref...HEAD")
+
+while IFS= read -r file; do
+  [[ -n "$file" ]] && changed_files_map["$file"]=1
+done < <(git diff --name-only)
+
+while IFS= read -r file; do
+  [[ -n "$file" ]] && changed_files_map["$file"]=1
+done < <(git diff --name-only --cached)
+
+while IFS= read -r file; do
+  [[ -n "$file" ]] && changed_files_map["$file"]=1
+done < <(git ls-files --others --exclude-standard)
+
+if [[ "${#changed_files_map[@]}" -gt 0 ]]; then
+  all_md=1
+  for file in "${!changed_files_map[@]}"; do
+    if [[ "$file" != *.md ]]; then
+      all_md=0
+      break
+    fi
+  done
+
+  if [[ "$all_md" -eq 1 ]]; then
+    echo "All detected changes are Markdown files; skipping bin/ci-fast."
+    exit 0
+  fi
+fi
 
 bin/ci-fast
