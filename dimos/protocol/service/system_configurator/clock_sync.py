@@ -20,6 +20,7 @@ import struct
 import time
 
 from dimos.protocol.service.system_configurator.base import SystemConfigurator, sudo_run
+from dimos.utils.human import human_duration
 
 
 class ClockSyncConfigurator(SystemConfigurator):
@@ -85,7 +86,7 @@ class ClockSyncConfigurator(SystemConfigurator):
             return True
 
         print(
-            f"[clock-sync] WARNING: clock offset is {self._offset * 1000:+.1f} ms "
+            f"[clock-sync] WARNING: clock offset is {human_duration(self._offset)} "
             f"(threshold: ±{self.MAX_OFFSET_SECONDS * 1000:.0f} ms)"
         )
         return False
@@ -93,7 +94,7 @@ class ClockSyncConfigurator(SystemConfigurator):
     def explanation(self) -> str | None:
         if self._offset is None:
             return None
-        offset_ms = self._offset * 1000
+        self._offset * 1000
         system = platform.system()
         if system == "Linux":
             cmd = "sudo timedatectl set-ntp true && sudo systemctl restart systemd-timesyncd"
@@ -102,7 +103,7 @@ class ClockSyncConfigurator(SystemConfigurator):
         else:
             cmd = "(manual NTP sync required for your platform)"
         return (
-            f"- Clock sync: local clock is off by {offset_ms:+.1f} ms "
+            f"- Clock sync: local clock is off by {human_duration(self._offset)} "
             f"(threshold: ±{self.MAX_OFFSET_SECONDS * 1000:.0f} ms)\n"
             f"  Fix: {cmd}"
         )

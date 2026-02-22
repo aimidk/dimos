@@ -545,7 +545,7 @@ class TestClockSyncConfigurator:
         ):
             explanation = configurator.explanation()
             assert explanation is not None
-            assert "+500.0 ms" in explanation
+            assert "+500.0 ms" in explanation or "+0.5 s" in explanation
             assert "timedatectl" in explanation
             assert "systemd-timesyncd" in explanation
 
