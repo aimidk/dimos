@@ -93,7 +93,16 @@ else
             exit 1
         fi
         git fetch ${TARGET_REMOTE} ${TARGET_BRANCH}
-        git reset --hard ${TARGET_REMOTE}/${TARGET_BRANCH}
+        # Only reset if the commit actually changed — git reset --hard updates
+        # file mtimes even when content is identical, which busts Docker's COPY cache
+        # and forces all downstream layers (including the ~25min colcon build) to rerun.
+        NEW_HEAD=$(git rev-parse ${TARGET_REMOTE}/${TARGET_BRANCH})
+        CURRENT_HEAD=$(git rev-parse HEAD)
+        if [ "$CURRENT_HEAD" != "$NEW_HEAD" ]; then
+            git reset --hard ${TARGET_REMOTE}/${TARGET_BRANCH}
+        else
+            echo -e "${GREEN}Already at latest commit ${CURRENT_HEAD:0:8}, skipping reset${NC}"
+        fi
     fi
     cd ..
 fi
@@ -128,6 +137,7 @@ case "$HOST_ARCH" in
 esac
 echo -e "${GREEN}Detected architecture: ${HOST_ARCH} → TARGETARCH=${TARGETARCH}${NC}"
 
+echo docker compose -f docker/navigation/docker-compose.yml build --build-arg TARGETARCH="$TARGETARCH"
 docker compose -f docker/navigation/docker-compose.yml build --build-arg TARGETARCH="$TARGETARCH"
 
 echo ""
