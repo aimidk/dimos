@@ -21,6 +21,7 @@ Encapsulates ROS transport and topic remapping for Unitree robots.
 from dataclasses import dataclass, field
 import logging
 from pathlib import Path
+import shutil
 import threading
 import time
 from typing import Any
@@ -51,10 +52,6 @@ from dimos.utils.transform_utils import euler_to_quaternion
 
 logger = setup_logger(level=logging.INFO)
 
-# Paths resolved relative to this file so they work on any machine
-_DIMOS_ROOT = Path(__file__).parent.parent.parent
-_DOCKERFILE = _DIMOS_ROOT / "docker" / "navigation" / "Dockerfile"
-
 
 @dataclass
 class ROSNavConfig(DockerModuleConfig):
@@ -62,40 +59,26 @@ class ROSNavConfig(DockerModuleConfig):
     docker_image: str = "dimos_autonomy_stack:humble"
     docker_shm_size: str = "8g"
     docker_entrypoint: str = "/usr/local/bin/dimos_module_entrypoint.sh"
-    docker_file: Path = field(default_factory=lambda: _DOCKERFILE)
-    docker_build_context: Path = field(default_factory=lambda: _DIMOS_ROOT)
-    # Jetson uses --runtime=nvidia, not --gpus all (which triggers the unsupported Hook path)
+    docker_file: Path = Path(__file__).parent.parent.parent / "docker" / "navigation" / "Dockerfile"
+    docker_build_context: Path = Path(__file__).parent.parent.parent
+    # No --gpus flag; Jetson runtime added via _nvidia_extra_args() when nvcc is present.
     docker_gpus: str | None = None
-    docker_extra_args: list = field(default_factory=lambda: ["--runtime=nvidia"])
+    docker_extra_args: list = field(
+        default_factory=lambda: ["--runtime=nvidia"] if shutil.which("nvcc") else []
+    )
     docker_env: dict = field(
         default_factory=lambda: {
             "ROS_DISTRO": "humble",
             "ROS_DOMAIN_ID": "42",
             "RMW_IMPLEMENTATION": "rmw_fastrtps_cpp",
             "FASTRTPS_DEFAULT_PROFILES_FILE": "/ros2_ws/config/fastdds.xml",
-            # Set to "false" for hardware mode where the nav stack runs externally
             "START_ROS_NAV": "true",
-            # Controlled by unity_simulation field below; default false
             "START_UNITY_SIM": "false",
         }
     )
-    docker_volumes: list = field(
-        default_factory=lambda: [
-            # Mount live dimos source so the module is always up-to-date
-            (str(_DIMOS_ROOT), "/workspace/dimos", "rw"),
-            # Mount entrypoint script so changes don't require a rebuild
-            (
-                str(Path(__file__).parent / "dimos_module_entrypoint.sh"),
-                "/usr/local/bin/dimos_module_entrypoint.sh",
-                "ro",
-            ),
-        ]
-    )
+    docker_volumes: list = field(default_factory=lambda: [])
 
     # --- Simulation settings ---
-    # When True, the entrypoint launches the Unity-based vehicle_simulator stack in the
-    # background (system_simulation_with_route_planner.launch.py).  Set False (default)
-    # when connecting to a real robot or when the simulation is managed externally.
     unity_simulation: bool = False
 
     # --- Module settings ---
@@ -107,6 +90,16 @@ class ROSNavConfig(DockerModuleConfig):
 
     def __post_init__(self) -> None:
         self.docker_env["START_UNITY_SIM"] = "true" if self.unity_simulation else "false"
+        self.docker_volumes += [
+            # Mount live dimos source so the module is always up-to-date
+            (str(Path(__file__).parent.parent.parent), "/workspace/dimos", "rw"),
+            # Mount entrypoint script so changes don't require a rebuild
+            (
+                str(Path(__file__).parent / "dimos_module_entrypoint.sh"),
+                "/usr/local/bin/dimos_module_entrypoint.sh",
+                "ro",
+            ),
+        ]
 
 
 class ROSNav(
