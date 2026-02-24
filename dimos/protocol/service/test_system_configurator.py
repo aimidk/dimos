@@ -163,31 +163,39 @@ class TestConfigureSystem:
     def test_prompts_user_and_fixes_on_yes(self) -> None:
         with patch.dict(os.environ, {"CI": ""}, clear=False):
             mock_check = MockConfigurator(passes=False)
-            with patch("builtins.input", return_value="y"):
-                configure_system([mock_check])
-                assert mock_check.fix_called
+            with patch("sys.stdin") as mock_stdin:
+                mock_stdin.isatty.return_value = True
+                with patch("builtins.input", return_value="y"):
+                    configure_system([mock_check])
+                    assert mock_check.fix_called
 
     def test_does_not_fix_on_no(self) -> None:
         with patch.dict(os.environ, {"CI": ""}, clear=False):
             mock_check = MockConfigurator(passes=False)
-            with patch("builtins.input", return_value="n"):
-                configure_system([mock_check])
-                assert not mock_check.fix_called
+            with patch("sys.stdin") as mock_stdin:
+                mock_stdin.isatty.return_value = True
+                with patch("builtins.input", return_value="n"):
+                    configure_system([mock_check])
+                    assert not mock_check.fix_called
 
     def test_exits_on_no_with_critical_check(self) -> None:
         with patch.dict(os.environ, {"CI": ""}, clear=False):
             mock_check = MockConfigurator(passes=False, is_critical=True)
-            with patch("builtins.input", return_value="n"):
-                with pytest.raises(SystemExit) as exc_info:
-                    configure_system([mock_check])
-                assert exc_info.value.code == 1
+            with patch("sys.stdin") as mock_stdin:
+                mock_stdin.isatty.return_value = True
+                with patch("builtins.input", return_value="n"):
+                    with pytest.raises(SystemExit) as exc_info:
+                        configure_system([mock_check])
+                    assert exc_info.value.code == 1
 
     def test_handles_eof_error_on_input(self) -> None:
         with patch.dict(os.environ, {"CI": ""}, clear=False):
             mock_check = MockConfigurator(passes=False)
-            with patch("builtins.input", side_effect=EOFError):
-                configure_system([mock_check])
-                assert not mock_check.fix_called
+            with patch("sys.stdin") as mock_stdin:
+                mock_stdin.isatty.return_value = True
+                with patch("builtins.input", side_effect=EOFError):
+                    configure_system([mock_check])
+                    assert not mock_check.fix_called
 
 
 # ----------------------------- MulticastConfiguratorLinux tests -----------------------------
