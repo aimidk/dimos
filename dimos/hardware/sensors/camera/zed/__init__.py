@@ -16,46 +16,14 @@
 
 from pathlib import Path
 
+from dimos.hardware.sensors.camera.zed.camera import ZEDCamera, ZEDModule, zed_camera
 from dimos.msgs.sensor_msgs.CameraInfo import CalibrationProvider
-
-# Check if ZED SDK is available
-try:
-    import pyzed.sl as sl  # noqa: F401
-
-    HAS_ZED_SDK = True
-except ImportError:
-    HAS_ZED_SDK = False
-
-# Only import ZED classes if SDK is available
-if HAS_ZED_SDK:
-    from dimos.hardware.sensors.camera.zed.camera import ZEDCamera, ZEDModule, zed_camera
-else:
-    # Provide stub classes when SDK is not available
-    class ZEDCamera:  # type: ignore[no-redef]
-        def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
-            raise ImportError(
-                "ZED SDK not installed. Please install pyzed package to use ZED camera functionality."
-            )
-
-    class ZEDModule:  # type: ignore[no-redef]
-        def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
-            raise ImportError(
-                "ZED SDK not installed. Please install pyzed package to use ZED camera functionality."
-            )
-
-    def zed_camera(*args: object, **kwargs: object) -> None:  # type: ignore[no-redef]
-        raise ModuleNotFoundError(
-            "ZED SDK not installed. Please install pyzed package to use ZED camera functionality.",
-            name="pyzed",
-        )
-
 
 # Set up camera calibration provider (always available)
 CALIBRATION_DIR = Path(__file__).parent
 CameraInfo = CalibrationProvider(CALIBRATION_DIR)
 
 __all__ = [
-    "HAS_ZED_SDK",
     "CameraInfo",
     "ZEDCamera",
     "ZEDModule",

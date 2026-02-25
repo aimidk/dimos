@@ -17,7 +17,8 @@ from multiprocessing.connection import Connection
 import traceback
 from typing import Any
 
-from dimos.core.module import ModuleT
+from dimos.core.global_config import GlobalConfig
+from dimos.core.module import Module, ModuleBase
 from dimos.core.rpc_client import RPCClient
 from dimos.utils.actor_registry import ActorRegistry
 from dimos.utils.logging_config import setup_logger
@@ -40,7 +41,7 @@ class Actor:
     """Proxy that forwards method calls to the worker process."""
 
     def __init__(
-        self, conn: Connection | None, module_class: type[ModuleT], worker_id: int
+        self, conn: Connection | None, module_class: type[ModuleBase], worker_id: int
     ) -> None:
         self._conn = conn
         self._cls = module_class
@@ -98,13 +99,13 @@ _seq_ids = SequentialIds()
 class Worker:
     def __init__(
         self,
-        module_class: type[ModuleT],
-        args: tuple[Any, ...] = (),
-        kwargs: dict[Any, Any] | None = None,
+        module_class: type[ModuleBase],
+        global_config: GlobalConfig,
+        kwargs: dict[str, Any],
     ) -> None:
-        self._module_class: type[ModuleT] = module_class
-        self._args: tuple[Any, ...] = args
-        self._kwargs: dict[Any, Any] = kwargs or {}
+        self._module_class = module_class
+        self._global_config = global_config
+        self._kwargs = kwargs
         self._process: Any = None
         self._conn: Connection | None = None
         self._actor: Actor | None = None
@@ -118,7 +119,13 @@ class Worker:
 
         self._process = ctx.Process(
             target=_worker_entrypoint,
-            args=(child_conn, self._module_class, self._args, self._kwargs, self._worker_id),
+            args=(
+                child_conn,
+                self._module_class,
+                self._global_config,
+                self._kwargs,
+                self._worker_id,
+            ),
             daemon=True,
         )
         self._process.start()
@@ -168,15 +175,15 @@ class Worker:
 
 def _worker_entrypoint(
     conn: Connection,
-    module_class: type[ModuleT],
-    args: tuple[Any, ...],
-    kwargs: dict[Any, Any],
+    module_class: type[Module],
+    global_config: GlobalConfig,
+    kwargs: dict[str, Any],
     worker_id: int,
 ) -> None:
     instance = None
 
     try:
-        instance = module_class(*args, **kwargs)
+        instance = module_class(global_config=global_config, **kwargs)
         instance.worker = worker_id
 
         _worker_loop(conn, instance, worker_id)

@@ -165,7 +165,7 @@ class Config(ModuleConfig):
     blueprint: BlueprintFactory | None = _default_blueprint
 
 
-class RerunBridgeModule(Module):
+class RerunBridgeModule(Module[Config]):
     """Bridge that logs messages from pubsubs to Rerun.
 
     Spawns its own Rerun viewer and subscribes to all topics on each provided
@@ -182,7 +182,6 @@ class RerunBridgeModule(Module):
     """
 
     default_config = Config
-    config: Config
 
     @lru_cache(maxsize=256)
     def _visual_override_for_entity_path(

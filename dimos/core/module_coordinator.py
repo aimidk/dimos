@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from dimos import core
 from dimos.core import DimosCluster
 from dimos.core.global_config import GlobalConfig, global_config
-from dimos.core.module import Module, ModuleT
+from dimos.core.module import ModuleBase, ModuleSpec
 from dimos.core.resource import Resource
 from dimos.core.worker_manager import WorkerManager
 
@@ -32,7 +32,7 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
     _global_config: GlobalConfig
     _n: int | None = None
     _memory_limit: str = "auto"
-    _deployed_modules: dict[type[Module], "ModuleProxy"]
+    _deployed_modules: dict[type[ModuleBase], "ModuleProxy"]
 
     def __init__(
         self,
@@ -56,17 +56,20 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
 
         self._client.close_all()  # type: ignore[union-attr]
 
-    def deploy(self, module_class: type[ModuleT], *args, **kwargs) -> "ModuleProxy":  # type: ignore[no-untyped-def]
-        if not self._client:
-            raise ValueError("Trying to dimos.deploy before dask client has started")
+    def deploy(
+        self,
+        module_class: type[ModuleBase[Any]],
+        global_config: GlobalConfig = global_config,
+        **kwargs: Any,
+    ) -> "ModuleProxy":
+        if not isinstance(self._client, WorkerManager):
+            raise RuntimeError("Trying to dimos.deploy before dask client has started")
 
-        module: ModuleProxy = self._client.deploy(module_class, *args, **kwargs)  # type: ignore[union-attr, attr-defined, assignment]
-        self._deployed_modules[module_class] = module
-        return module
+        module = self._client.deploy(module_class, global_config, **kwargs)
+        self._deployed_modules[module_class] = module  # type: ignore[assignment]
+        return module  # type: ignore[return-value]
 
-    def deploy_parallel(
-        self, module_specs: list[tuple[type[ModuleT], tuple[Any, ...], dict[str, Any]]]
-    ) -> list["ModuleProxy"]:
+    def deploy_parallel(self, module_specs: list[ModuleSpec]) -> list["ModuleProxy"]:
         if not self._client:
             raise ValueError("Not started")
 
@@ -75,11 +78,8 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
             for (module_class, _, _), module in zip(module_specs, modules, strict=True):
                 self._deployed_modules[module_class] = module  # type: ignore[assignment]
             return modules  # type: ignore[return-value]
-        else:
-            return [
-                self.deploy(module_class, *args, **kwargs)
-                for module_class, args, kwargs in module_specs
-            ]
+
+        return [self.deploy(m, c, **kw) for m, c, kw in module_specs]
 
     def start_all_modules(self) -> None:
         modules = list(self._deployed_modules.values())
@@ -95,7 +95,7 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
             if hasattr(module, "on_system_modules"):
                 module.on_system_modules(module_list)
 
-    def get_instance(self, module: type[ModuleT]) -> "ModuleProxy":
+    def get_instance(self, module: type[ModuleBase]) -> "ModuleProxy":
         return self._deployed_modules.get(module)  # type: ignore[return-value, no-any-return]
 
     def loop(self) -> None:

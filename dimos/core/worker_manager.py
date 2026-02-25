@@ -14,7 +14,8 @@
 
 from typing import Any
 
-from dimos.core.module import ModuleT
+from dimos.core.global_config import GlobalConfig
+from dimos.core.module import ModuleBase
 from dimos.core.rpc_client import RPCClient
 from dimos.core.worker import Worker
 from dimos.utils.actor_registry import ActorRegistry
@@ -28,24 +29,26 @@ class WorkerManager:
         self._workers: list[Worker] = []
         self._closed = False
 
-    def deploy(self, module_class: type[ModuleT], *args: Any, **kwargs: Any) -> RPCClient:
+    def deploy(
+        self, module_class: type[ModuleBase], global_config: GlobalConfig, kwargs: dict[str, Any]
+    ) -> RPCClient:
         if self._closed:
             raise RuntimeError("WorkerManager is closed")
 
-        worker = Worker(module_class, args=args, kwargs=kwargs)
+        worker = Worker(module_class, global_config, kwargs)
         worker.deploy()
         self._workers.append(worker)
         return worker.get_instance()
 
     def deploy_parallel(
-        self, module_specs: list[tuple[type[ModuleT], tuple[Any, ...], dict[Any, Any]]]
+        self, module_specs: list[tuple[type[ModuleBase], GlobalConfig, dict[str, Any]]]
     ) -> list[RPCClient]:
         if self._closed:
             raise RuntimeError("WorkerManager is closed")
 
         workers: list[Worker] = []
-        for module_class, args, kwargs in module_specs:
-            worker = Worker(module_class, args=args, kwargs=kwargs)
+        for module_class, global_config, kwargs in module_specs:
+            worker = Worker(module_class, global_config, kwargs)
             worker.start_process()
             workers.append(worker)
 

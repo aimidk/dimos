@@ -13,19 +13,17 @@
 # limitations under the License.
 
 import asyncio
+from collections.abc import Sequence
 import logging
 import threading
-from typing import TYPE_CHECKING, Any
 
 from dimos_lcm.foxglove_bridge import (
     FoxgloveBridge as LCMFoxgloveBridge,
 )
 
 from dimos.core import DimosCluster, Module, rpc
+from dimos.core.module import ModuleConfig
 from dimos.utils.logging_config import setup_logger
-
-if TYPE_CHECKING:
-    from dimos.core.global_config import GlobalConfig
 
 logging.getLogger("lcm_foxglove_bridge").setLevel(logging.ERROR)
 logging.getLogger("FoxgloveServer").setLevel(logging.ERROR)
@@ -33,23 +31,15 @@ logging.getLogger("FoxgloveServer").setLevel(logging.ERROR)
 logger = setup_logger()
 
 
-class FoxgloveBridge(Module):
+class FoxgloveConfig(ModuleConfig):
+    shm_channels: Sequence[str] = ()
+    jpeg_shm_channels: Sequence[str] = ()
+
+
+class FoxgloveBridge(Module[FoxgloveConfig]):
     _thread: threading.Thread
     _loop: asyncio.AbstractEventLoop
-    _global_config: "GlobalConfig | None" = None
-
-    def __init__(
-        self,
-        *args: Any,
-        shm_channels: list[str] | None = None,
-        jpeg_shm_channels: list[str] | None = None,
-        global_config: "GlobalConfig | None" = None,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self.shm_channels = shm_channels or []
-        self.jpeg_shm_channels = jpeg_shm_channels or []
-        self._global_config = global_config
+    default_config = FoxgloveConfig
 
     @rpc
     def start(self) -> None:
@@ -77,8 +67,8 @@ class FoxgloveBridge(Module):
                     port=8765,
                     debug=False,
                     num_threads=4,
-                    shm_channels=self.shm_channels,
-                    jpeg_shm_channels=self.jpeg_shm_channels,
+                    shm_channels=self.config.shm_channels,
+                    jpeg_shm_channels=self.config.jpeg_shm_channels,
                 )
                 self._loop.run_until_complete(bridge.run())
             except Exception as e:

@@ -34,6 +34,7 @@ from dimos.agents.annotation import skill
 from dimos.constants import DIMOS_PROJECT_ROOT
 from dimos.core import In, Module, rpc
 from dimos.core.docker_runner import DockerModule as DockerRunner
+from dimos.core.global_config import GlobalConfig, global_config
 from dimos.core.module import ModuleConfig
 from dimos.manipulation.grasping.graspgen_module import GraspGenModule
 from dimos.manipulation.planning import (
@@ -118,7 +119,7 @@ class ManipulationModuleConfig(ModuleConfig):
     )
 
 
-class ManipulationModule(Module):
+class ManipulationModule(Module[ManipulationModuleConfig]):
     """Motion planning module with ControlCoordinator execution.
 
     - @rpc: Low-level building blocks (plan, execute, obstacles)
@@ -128,17 +129,14 @@ class ManipulationModule(Module):
 
     default_config = ManipulationModuleConfig
 
-    # Type annotation for the config attribute (mypy uses this)
-    config: ManipulationModuleConfig
-
     # Input: Joint state from coordinator (for world sync)
     joint_state: In[JointState]
 
     # Input: Objects from perception (for obstacle integration)
     objects: In[list[DetObject]]
 
-    def __init__(self, *args: object, **kwargs: object) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, global_config: GlobalConfig = global_config, **kwargs: Any) -> None:
+        super().__init__(global_config, **kwargs)
 
         # State machine
         self._state = ManipulationState.IDLE
