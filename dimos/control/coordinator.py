@@ -101,7 +101,7 @@ class TaskConfig:
     hand: str = ""  # teleop_ik only: "left" or "right" controller
     # Teleop IK gripper specific
     gripper_joint: str | None = None
-    gripper_open_pos: float = 0.85
+    gripper_open_pos: float = 0.0
     gripper_closed_pos: float = 0.0
 
 
@@ -254,7 +254,7 @@ class ControlCoordinator(Module[ControlCoordinatorConfig]):
             raise
 
     def _setup_gripper_hardware(self, component: HardwareComponent) -> None:
-        """Register a gripper by borrowing the parent arm's adapter"""
+        """Register a gripper by borrowing the parent arm's adapter."""
         if not component.parent_hardware_id:
             raise ValueError(
                 f"Gripper component '{component.hardware_id}' requires parent_hardware_id"
@@ -265,8 +265,8 @@ class ControlCoordinator(Module[ControlCoordinatorConfig]):
 
         if parent is None:
             raise ValueError(
-                f"Parent hardware '{component.parent_hardware_id}' not found for gripper '{component.hardware_id}'"
-                f"Add the parent arm before the gripper."
+                f"Parent hardware '{component.parent_hardware_id}' not found for gripper "
+                f"'{component.hardware_id}'. Add the parent arm before the gripper."
             )
 
         self.add_hardware(parent.adapter, component)

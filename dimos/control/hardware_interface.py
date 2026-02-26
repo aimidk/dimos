@@ -324,11 +324,12 @@ class ConnectedGripper(ConnectedHardware):
         """Write gripper position via adapter.write_gripper_position().
 
         Mode is ignored — gripper is always position-controlled.
+        Re-sends last commanded position when no new command arrives (hold-last-value).
         """
         joint_name = self._joint_names[0]
-        if joint_name not in commands:
-            return True  # nothing commanded this tick, hold current
-        return self._adapter.write_gripper_position(commands[joint_name])
+        if joint_name in commands:
+            self._last_commanded[joint_name] = commands[joint_name]
+        return self._adapter.write_gripper_position(self._last_commanded[joint_name])
 
 
 __all__ = [

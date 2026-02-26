@@ -725,6 +725,7 @@ __all__ = [
     # Teleop IK
     "coordinator_teleop_dual",
     "coordinator_teleop_piper",
+    "coordinator_teleop_xarm6",
     "coordinator_teleop_xarm7",
     "coordinator_velocity_xarm6",
     "coordinator_xarm6",
