@@ -30,6 +30,15 @@ source /ros2_ws/install/setup.bash
 # Activate the dimos Python venv
 source /opt/dimos-venv/bin/activate
 
+# Ensure we use the live dimos source from the host
+# This keeps the container in sync with local code (no stale wheel issues).
+if [ -d "/workspace/dimos" ]; then
+    echo "[dimos_module_entrypoint] Installing dimos from /workspace/dimos (pip -e)"
+    pip install -e /workspace/dimos >/tmp/dimos_pip_install.log 2>&1 || {
+        echo "[dimos_module_entrypoint] WARNING: pip -e /workspace/dimos failed; see /tmp/dimos_pip_install.log"
+    }
+fi
+
 # DDS configuration
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 export FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/config/fastdds.xml
@@ -51,6 +60,7 @@ if [ "${START_ROS_NAV:-true}" = "true" ]; then
     if [ "${START_UNITY_SIM:-false}" = "true" ]; then
         echo "[dimos_module_entrypoint] START_UNITY_SIM=true: launching Unity simulation stack in background..."
         cd /ros2_ws/src/ros-navigation-autonomy-stack
+        # Launch Unity-based vehicle_simulator + planners
         setsid bash -c "source /opt/ros/${ROS_DISTRO:-humble}/setup.bash && \
             source /ros2_ws/install/setup.bash && \
             ros2 launch vehicle_simulator system_simulation_with_route_planner.launch.py \
