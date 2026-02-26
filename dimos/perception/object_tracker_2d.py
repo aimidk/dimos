@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
 import logging
 import threading
 import time
@@ -45,7 +44,6 @@ from dimos.utils.logging_config import setup_logger
 logger = setup_logger(level=logging.INFO)
 
 
-@dataclass
 class ObjectTracker2DConfig(ModuleConfig):
     frame_id: str = "camera_link"
 
@@ -59,7 +57,6 @@ class ObjectTracker2D(Module[ObjectTracker2DConfig]):
     tracked_overlay: Out[Image]  # Visualization output
 
     default_config = ObjectTracker2DConfig
-    config: ObjectTracker2DConfig
 
     def __init__(self, global_config: GlobalConfig = global_config, **kwargs: Any) -> None:
         """Initialize 2D object tracking module using OpenCV's CSRT tracker."""

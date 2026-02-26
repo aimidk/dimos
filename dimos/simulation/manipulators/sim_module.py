@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from reactivex.disposable import Disposable
 
 from dimos.core import In, Module, Out, rpc
+from dimos.core.global_config import GlobalConfig, global_config
 from dimos.core.module import ModuleConfig
 from dimos.msgs.sensor_msgs import JointCommand, JointState, RobotState
 from dimos.simulation.engines import EngineType, get_engine
@@ -43,7 +44,6 @@ class SimulationModule(Module[SimulationModuleConfig]):
     """Module wrapper for manipulator simulation across engines."""
 
     default_config = SimulationModuleConfig
-    config: SimulationModuleConfig
 
     joint_state: Out[JointState]
     robot_state: Out[RobotState]
@@ -52,8 +52,8 @@ class SimulationModule(Module[SimulationModuleConfig]):
 
     MIN_CONTROL_RATE = 1.0
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, global_config: GlobalConfig = global_config, **kwargs: Any) -> None:
+        super().__init__(global_config, **kwargs)
         self._backend: SimManipInterface | None = None
         self._control_rate = 100.0
         self._monitor_rate = 100.0

@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 
 from dask.distributed import Actor, get_worker
 from langchain_core.tools import tool
-from pydantic import BaseModel
 from reactivex.disposable import CompositeDisposable
 
 from dimos.core import colors
@@ -50,7 +49,7 @@ from dimos.core.resource import Resource
 from dimos.core.rpc_client import RpcCall  # noqa: TC001
 from dimos.core.stream import In, Out, RemoteIn, RemoteOut, Transport
 from dimos.protocol.rpc import LCMRPC, RPCSpec
-from dimos.protocol.service import Configurable  # type: ignore[attr-defined]
+from dimos.protocol.service import BaseConfig, Configurable
 from dimos.protocol.tf import LCMTF, TFSpec
 from dimos.utils.generic import classproperty
 
@@ -95,11 +94,9 @@ def get_loop() -> tuple[asyncio.AbstractEventLoop, threading.Thread | None]:
         return loop, thr
 
 
-class ModuleConfig(BaseModel):
-    model_config = {"arbitrary_types_allowed": True}
-
+class ModuleConfig(BaseConfig):
     rpc_transport: type[RPCSpec] = LCMRPC
-    tf_transport: type[TFSpec] = LCMTF
+    tf_transport: type[TFSpec] = LCMTF  # type: ignore[type-arg]
     frame_id_prefix: str | None = None
     frame_id: str | None = None
 
@@ -112,8 +109,11 @@ class _BlueprintPartial(Protocol):
 
 
 class ModuleBase(Configurable[ModuleConfigT], Resource):
+    # This won't type check against the TypeVar, but we need it as the default.
+    default_config: type[ModuleConfigT] = ModuleConfig  # type: ignore[assignment]
+
     _rpc: RPCSpec | None = None
-    _tf: TFSpec | None = None
+    _tf: TFSpec[Any] | None = None
     _loop: asyncio.AbstractEventLoop | None = None
     _loop_thread: threading.Thread | None
     _disposables: CompositeDisposable

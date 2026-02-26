@@ -25,7 +25,7 @@ from dimos.protocol.pubsub.encoders import (
 )
 from dimos.protocol.pubsub.patterns import Glob
 from dimos.protocol.pubsub.spec import AllPubSub
-from dimos.protocol.service.lcmservice import LCMConfig, LCMService, autoconf
+from dimos.protocol.service.lcmservice import LCMService, autoconf
 from dimos.utils.logging_config import setup_logger
 
 if TYPE_CHECKING:
@@ -83,7 +83,6 @@ class LCMPubSubBase(LCMService, AllPubSub[Topic, Any]):
     RegexSubscribable directly without needing discovery-based fallback.
     """
 
-    default_config = LCMConfig
     _stop_event: threading.Event
     _thread: threading.Thread | None
 

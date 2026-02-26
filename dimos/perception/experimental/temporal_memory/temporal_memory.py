@@ -112,7 +112,7 @@ class TemporalMemory(Module):
     color_image: In[Image]
 
     def __init__(
-        self, vlm: VlModel | None = None, config: TemporalMemoryConfig | None = None
+        self, vlm: VlModel[Any] | None = None, config: TemporalMemoryConfig | None = None
     ) -> None:
         super().__init__()
 
@@ -183,7 +183,7 @@ class TemporalMemory(Module):
         )
 
     @property
-    def vlm(self) -> VlModel:
+    def vlm(self) -> VlModel[Any]:
         """Get or create VLM instance lazily."""
         if self._vlm is None:
             from dimos.models.vl.openai import OpenAIVlModel

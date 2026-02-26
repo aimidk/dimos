@@ -16,8 +16,19 @@
 
 from pathlib import Path
 
-from dimos.hardware.sensors.camera.zed.camera import ZEDCamera, ZEDModule, zed_camera
 from dimos.msgs.sensor_msgs.CameraInfo import CalibrationProvider
+
+try:
+    import pyzed.sl  # noqa: F401
+
+    # This awkwardness is needed as pytest implicitly imports this to collect
+    # the test in this directory.
+    HAS_ZED_SDK = True
+except ImportError:
+    HAS_ZED_SDK = False
+
+if HAS_ZED_SDK:
+    from dimos.hardware.sensors.camera.zed.camera import ZEDCamera, ZEDModule, zed_camera
 
 # Set up camera calibration provider (always available)
 CALIBRATION_DIR = Path(__file__).parent

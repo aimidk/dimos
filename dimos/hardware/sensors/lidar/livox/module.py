@@ -26,7 +26,6 @@ Usage::
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from dimos.core import Out  # noqa: TC001
@@ -48,7 +47,6 @@ from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2  # noqa: TC001
 from dimos.spec import perception
 
 
-@dataclass(kw_only=True)
 class Mid360Config(NativeModuleConfig):
     """Config for the C++ Mid-360 native module."""
 
@@ -76,7 +74,7 @@ class Mid360Config(NativeModuleConfig):
     host_log_data_port: int = SDK_HOST_LOG_DATA_PORT
 
 
-class Mid360(NativeModule, perception.Lidar, perception.IMU):
+class Mid360(NativeModule[Mid360Config], perception.Lidar, perception.IMU):
     """Livox Mid-360 LiDAR module backed by a native C++ binary.
 
     Ports:

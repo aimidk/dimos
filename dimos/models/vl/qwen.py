@@ -10,7 +10,6 @@ from dimos.models.vl.base import VlModel, VlModelConfig
 from dimos.msgs.sensor_msgs import Image
 
 
-@dataclass
 class QwenVlModelConfig(VlModelConfig):
     """Configuration for Qwen VL model."""
 
@@ -18,9 +17,8 @@ class QwenVlModelConfig(VlModelConfig):
     api_key: str | None = None
 
 
-class QwenVlModel(VlModel):
+class QwenVlModel(VlModel[QwenVlModelConfig]):
     default_config = QwenVlModelConfig
-    config: QwenVlModelConfig
 
     @cached_property
     def _client(self) -> OpenAI:

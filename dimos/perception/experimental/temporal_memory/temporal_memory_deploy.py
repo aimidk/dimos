@@ -17,7 +17,7 @@ Deployment helpers for TemporalMemory module.
 """
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from dimos.core._dask_exports import DimosCluster
 from dimos.models.vl.base import VlModel
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 def deploy(
     dimos: DimosCluster,
     camera: CameraSpec,
-    vlm: VlModel | None = None,
+    vlm: VlModel[Any] | None = None,
     config: TemporalMemoryConfig | None = None,
 ) -> TemporalMemory:
     """Deploy TemporalMemory with a camera.

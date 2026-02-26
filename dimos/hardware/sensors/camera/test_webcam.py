@@ -17,7 +17,6 @@ import time
 import pytest
 
 from dimos import core
-from dimos.hardware.sensors.camera import zed
 from dimos.hardware.sensors.camera.module import CameraModule
 from dimos.hardware.sensors.camera.webcam import Webcam
 from dimos.msgs.geometry_msgs import Quaternion, Transform, Vector3
@@ -33,6 +32,11 @@ def dimos():
 
 @pytest.mark.tool
 def test_streaming_single(dimos) -> None:
+    try:
+        from dimos.hardware.sensors.camera import zed
+    except ModuleNotFoundError:
+        pytest.skip("ZED SDK not installed")
+
     camera = dimos.deploy(
         CameraModule,
         transform=Transform(

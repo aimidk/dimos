@@ -15,8 +15,15 @@
 from abc import ABC
 from typing import Any, Generic, TypeVar
 
+from pydantic import BaseModel
+
+
+class BaseConfig(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+
+
 # Generic type for service configuration
-ConfigT = TypeVar("ConfigT")
+ConfigT = TypeVar("ConfigT", bound=BaseConfig)
 
 
 class Configurable(Generic[ConfigT]):

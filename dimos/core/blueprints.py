@@ -134,7 +134,10 @@ class Blueprint:
         )
 
     def remappings(
-        self, remappings: list[tuple[type[ModuleBase], str, str | type[ModuleBase] | type[Spec]]]
+        self,
+        remappings: list[
+            tuple[type[ModuleBase[Any]], str, str | type[ModuleBase[Any]] | type[Spec]]
+        ],
     ) -> "Blueprint":
         remappings_dict = dict(self.remapping_map)
         for module, old, new in remappings:
