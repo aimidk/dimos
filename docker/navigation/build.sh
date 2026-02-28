@@ -62,7 +62,7 @@ cd "$SCRIPT_DIR"
 # Use fastlio2 branch which has both arise_slam and FASTLIO2
 TARGET_BRANCH="fastlio2"
 TARGET_REMOTE="origin"
-CLONE_URL="https://github.com/dimensionalOS/ros-navigation-autonomy-stack.git"
+CLONE_URL="git@github.com:dimensionalOS/ros-navigation-autonomy-stack.git"
 
 # Clone or checkout ros-navigation-autonomy-stack
 if [ ! -d "ros-navigation-autonomy-stack" ]; then
@@ -113,7 +113,13 @@ echo -e "${GREEN}Pinning ros-navigation-autonomy-stack file timestamps to HEAD c
 
 if [ ! -d "unity_models" ]; then
     echo -e "${YELLOW}Using office_building_1 as the Unity environment...${NC}"
-    tar -xf ../../data/.lfs/office_building_1.tar.gz
+    LFS_ASSET="../../data/.lfs/office_building_1.tar.gz"
+    # If the file is still a Git LFS pointer (not yet downloaded), fetch it now.
+    if file "$LFS_ASSET" | grep -q "ASCII text"; then
+        echo -e "${YELLOW}office_building_1.tar.gz is an LFS pointer — fetching via git lfs...${NC}"
+        git -C "$(realpath ../../)" lfs pull --include="data/.lfs/office_building_1.tar.gz"
+    fi
+    tar -xf "$LFS_ASSET"
     mv office_building_1 unity_models
 fi
 
@@ -141,8 +147,28 @@ case "$HOST_ARCH" in
 esac
 echo -e "${GREEN}Detected architecture: ${HOST_ARCH} → TARGETARCH=${TARGETARCH}${NC}"
 
-echo docker compose -f docker/navigation/docker-compose.yml build --build-arg TARGETARCH="$TARGETARCH"
-docker compose -f docker/navigation/docker-compose.yml build --build-arg TARGETARCH="$TARGETARCH"
+# Prefer the Docker Compose V2 plugin; fall back to the legacy standalone binary.
+# Auto-install the plugin if neither is available.
+if docker compose version &>/dev/null; then
+    COMPOSE_CMD="docker compose"
+elif command -v docker-compose &>/dev/null; then
+    COMPOSE_CMD="docker-compose"
+else
+    echo -e "${YELLOW}Docker Compose not found — installing docker-compose-plugin...${NC}"
+    sudo apt-get update -qq && sudo apt-get install -y docker-compose-v2 || sudo apt-get install -y docker-compose-plugin
+    if docker compose version &>/dev/null; then
+        COMPOSE_CMD="docker compose"
+    else
+        echo -e "${RED}Error: Failed to install Docker Compose.${NC}"
+        echo "Please install it manually: sudo apt-get install docker-compose-v2"
+        echo "or follow https://docs.docker.com/compose/install/"
+        exit 1
+    fi
+fi
+echo -e "${GREEN}Using compose command: ${COMPOSE_CMD}${NC}"
+
+echo $COMPOSE_CMD -f docker/navigation/docker-compose.yml build --build-arg TARGETARCH="$TARGETARCH"
+$COMPOSE_CMD -f docker/navigation/docker-compose.yml build --build-arg TARGETARCH="$TARGETARCH"
 
 echo ""
 echo -e "${GREEN}============================================${NC}"
