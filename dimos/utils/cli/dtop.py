@@ -24,10 +24,14 @@ import threading
 import time
 from typing import Any
 
+from rich.console import Group, RenderableType
+from rich.panel import Panel
+from rich.rule import Rule
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.color import Color
-from textual.widgets import DataTable
+from textual.containers import VerticalScroll
+from textual.widgets import Static
 
 from dimos.protocol.pubsub.impl.lcmpubsub import PickleLCM, Topic
 from dimos.utils.cli import theme
@@ -80,14 +84,11 @@ class ResourceSpyApp(App):  # type: ignore[type-arg]
         layout: vertical;
         background: {theme.BACKGROUND};
     }}
-    DataTable {{
+    VerticalScroll {{
         height: 1fr;
-        border: solid {theme.BORDER};
-        background: {theme.BG};
         scrollbar-size: 0 0;
     }}
-    DataTable > .datatable--header {{
-        color: {theme.ACCENT};
+    #panels {{
         background: transparent;
     }}
     """
@@ -103,21 +104,8 @@ class ResourceSpyApp(App):  # type: ignore[type-arg]
         self._last_msg_time: float = 0.0
 
     def compose(self) -> ComposeResult:
-        table: DataTable = DataTable(zebra_stripes=True, cursor_type=None)  # type: ignore[type-arg, arg-type]
-        table.add_column("Modules", width=30)
-        table.add_column("CPU %", width=8)
-        table.add_column("CPU bar", width=14)
-        table.add_column("User", width=8)
-        table.add_column("Sys", width=8)
-        table.add_column("IOw", width=8)
-        table.add_column("PSS", width=10)
-        table.add_column("Thr", width=5)
-        table.add_column("Ch", width=5)
-        table.add_column("FDs", width=5)
-        table.add_column("IO R/W", width=14)
-        table.add_column("Role", width=14)
-        table.add_column("PID", width=8)
-        yield table
+        with VerticalScroll():
+            yield Static(id="panels")
 
     def on_mount(self) -> None:
         self._lcm.subscribe(Topic(self._topic_name), self._on_msg)
@@ -141,56 +129,174 @@ class ResourceSpyApp(App):  # type: ignore[type-arg]
             return
 
         stale = (time.monotonic() - last_msg) > 2.0
+        dim = "#606060"
+        border_style = dim if stale else theme.BORDER
 
-        table = self.query_one(DataTable)
-        table.clear(columns=False)
+        # Collect (role, role_style, data_dict, modules) entries
+        entries: list[tuple[str, str, dict[str, Any], str]] = []
 
         coord = data.get("coordinator", {})
-        self._add_row(table, "coordinator", theme.BRIGHT_CYAN, coord, "—", stale)
+        entries.append(("coordinator", theme.BRIGHT_CYAN, coord, ""))
 
         for w in data.get("workers", []):
             alive = w.get("alive", False)
             wid = w.get("worker_id", "?")
             role_style = theme.BRIGHT_GREEN if alive else theme.BRIGHT_RED
-            modules = ", ".join(w.get("modules", [])) or "—"
-            self._add_row(table, f"worker {wid}", role_style, w, modules, stale)
+            modules = ", ".join(w.get("modules", [])) or ""
+            entries.append((f"worker {wid}", role_style, w, modules))
+
+        # Build inner content: sections separated by Rules
+        parts: list[RenderableType] = []
+        for i, (role, rs, d, mods) in enumerate(entries):
+            if i > 0:
+                # Titled divider between processes
+                title = Text(
+                    f" {role}: {mods} " if mods else f" {role} ", style=dim if stale else rs
+                )
+                parts.append(Rule(title=title, style=border_style))
+            parts.extend(self._make_lines(d, stale))
+
+        # First entry title goes on the Panel itself
+        first_role, first_rs, _, first_mods = entries[0]
+        panel_title = Text(
+            f" {first_role}: {first_mods} " if first_mods else f" {first_role} ",
+            style=dim if stale else first_rs,
+        )
+
+        panel = Panel(
+            Group(*parts),
+            title=panel_title,
+            border_style=border_style,
+        )
+        self.query_one("#panels", Static).update(panel)
 
     @staticmethod
-    def _add_row(
-        table: DataTable,  # type: ignore[type-arg]
-        role: str,
-        role_style: str,
-        d: dict[str, Any],
-        modules: str,
-        stale: bool,
-    ) -> None:
+    def _make_lines(d: dict[str, Any], stale: bool) -> list[Text]:
         dim = "#606060"
-        s = dim if stale else None  # override style when stale
-        table.add_row(
-            Text(modules, style=s or theme.BRIGHT_BLUE),
-            Text(
-                f"{d.get('cpu_percent', 0):.0f}%",
-                style=s or _heat(min(d.get("cpu_percent", 0) / 100.0, 1.0)),
-            ),
-            _bar(d.get("cpu_percent", 0), 100) if not stale else Text("░" * 12, style=dim),
-            Text(_fmt_time(d.get("cpu_time_user", 0)).plain, style=s or theme.WHITE),
-            Text(_fmt_time(d.get("cpu_time_system", 0)).plain, style=s or theme.WHITE),
-            Text(_fmt_time(d.get("cpu_time_iowait", 0)).plain, style=s or theme.WHITE),
-            Text(_fmt_bytes(d.get("pss", 0)).plain, style=s or _fmt_bytes(d.get("pss", 0)).style),
-            Text(str(d.get("num_threads", 0)), style=s or theme.WHITE),
-            Text(str(d.get("num_children", 0)), style=s or theme.WHITE),
-            Text(str(d.get("num_fds", 0)), style=s or theme.WHITE),
-            Text(
-                f"{d.get('io_read_bytes', 0) / 1048576:.0f}/{d.get('io_write_bytes', 0) / 1048576:.0f}",
-                style=s or theme.WHITE,
-            ),
-            Text(role, style=s or role_style),
-            Text(str(d.get("pid", "?")), style=s or theme.BRIGHT_BLACK),
+        dim2 = "#505050"
+
+        cpu = d.get("cpu_percent", 0)
+        pss_text = _fmt_bytes(d.get("pss", 0))
+        thr = d.get("num_threads", 0)
+        ch = d.get("num_children", 0)
+        fds = d.get("num_fds", 0)
+
+        # Line 1: CPU% + bar + PSS + Thr/Child/FDs
+        line1 = Text()
+        line1.append("CPU ", style=dim if stale else theme.WHITE)
+        line1.append(f"{cpu:.0f}%", style=dim if stale else _heat(min(cpu / 100.0, 1.0)))
+        line1.append("  ")
+        if stale:
+            line1.append("░" * 12, style=dim)
+        else:
+            line1.append_text(_bar(cpu, 100))
+        line1.append("  PSS ", style=dim if stale else theme.WHITE)
+        line1.append(
+            pss_text.plain,
+            style=dim if stale else (pss_text.style or theme.WHITE),
         )
+        line1.append(f"  Thr {thr}", style=dim if stale else theme.WHITE)
+        line1.append(f"  Child {ch}", style=dim if stale else theme.WHITE)
+        line1.append(f"  FDs {fds}", style=dim if stale else theme.WHITE)
+
+        # Line 2: CPU times + IO R/W
+        s2 = dim if stale else dim2
+        user_t = _fmt_time(d.get("cpu_time_user", 0)).plain
+        sys_t = _fmt_time(d.get("cpu_time_system", 0)).plain
+        iow_t = _fmt_time(d.get("cpu_time_iowait", 0)).plain
+        io_r = d.get("io_read_bytes", 0) / 1048576
+        io_w = d.get("io_write_bytes", 0) / 1048576
+
+        line2 = Text()
+        line2.append(f"User {user_t}  Sys {sys_t}  IOw {iow_t}", style=s2)
+        line2.append(f"  IO R/W {io_r:.0f}/{io_w:.0f} MB", style=s2)
+
+        return [line1, line2]
+
+
+_PREVIEW_DATA: dict[str, Any] = {
+    "coordinator": {
+        "cpu_percent": 12.3,
+        "pss": 47_400_000,
+        "num_threads": 4,
+        "num_children": 0,
+        "num_fds": 32,
+        "cpu_time_user": 1.2,
+        "cpu_time_system": 0.3,
+        "cpu_time_iowait": 0.0,
+        "io_read_bytes": 12_582_912,
+        "io_write_bytes": 4_194_304,
+        "pid": 1234,
+    },
+    "workers": [
+        {
+            "worker_id": 0,
+            "alive": True,
+            "modules": ["nav", "lidar"],
+            "cpu_percent": 34.0,
+            "pss": 125_829_120,
+            "num_threads": 8,
+            "num_children": 2,
+            "num_fds": 64,
+            "cpu_time_user": 5.1,
+            "cpu_time_system": 1.0,
+            "cpu_time_iowait": 0.2,
+            "io_read_bytes": 47_185_920,
+            "io_write_bytes": 12_582_912,
+            "pid": 1235,
+        },
+        {
+            "worker_id": 1,
+            "alive": False,
+            "modules": ["vision"],
+            "cpu_percent": 87.0,
+            "pss": 536_870_912,
+            "num_threads": 16,
+            "num_children": 1,
+            "num_fds": 128,
+            "cpu_time_user": 42.5,
+            "cpu_time_system": 8.3,
+            "cpu_time_iowait": 1.1,
+            "io_read_bytes": 1_073_741_824,
+            "io_write_bytes": 536_870_912,
+            "pid": 1236,
+        },
+    ],
+}
+
+
+def _preview() -> None:
+    """Print a static preview with fake data (no LCM needed)."""
+    from rich.console import Console
+
+    data = _PREVIEW_DATA
+    border_style = theme.BORDER
+
+    entries: list[tuple[str, str, dict[str, Any], str]] = []
+    entries.append(("coordinator", theme.BRIGHT_CYAN, data["coordinator"], ""))
+    for w in data["workers"]:
+        rs = theme.BRIGHT_GREEN if w.get("alive") else theme.BRIGHT_RED
+        mods = ", ".join(w.get("modules", []))
+        entries.append((f"worker {w['worker_id']}", rs, w, mods))
+
+    parts: list[RenderableType] = []
+    for i, (role, rs, d, mods) in enumerate(entries):
+        if i > 0:
+            title = Text(f" {role}: {mods} " if mods else f" {role} ", style=rs)
+            parts.append(Rule(title=title, style=border_style))
+        parts.extend(ResourceSpyApp._make_lines(d, stale=False))
+
+    first_role, first_rs, _, first_mods = entries[0]
+    panel_title = Text(f" {first_role} ", style=first_rs)
+    Console().print(Panel(Group(*parts), title=panel_title, border_style=border_style))
 
 
 def main() -> None:
     import sys
+
+    if "--preview" in sys.argv:
+        _preview()
+        return
 
     topic = "/dimos/resource_stats"
     if len(sys.argv) > 1 and sys.argv[1] == "--topic" and len(sys.argv) > 2:
