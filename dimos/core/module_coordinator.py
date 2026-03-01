@@ -54,7 +54,7 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
         self._client = WorkerManager(n_workers=n)
         self._client.start()
 
-        if self._global_config.stats:
+        if self._global_config.dtop:
             from dimos.core.resource_monitor.monitor import StatsMonitor
 
             self._stats_monitor = StatsMonitor(self._client)
