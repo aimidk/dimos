@@ -1,4 +1,5 @@
-from dimos.msgs.geometry_msgs.PointStamped import Point, PointStamped
+from dimos.msgs.geometry_msgs.Point import Point
+from dimos.msgs.geometry_msgs.PointStamped import PointStamped
 from dimos.msgs.geometry_msgs.Pose import Pose, PoseLike, to_pose
 from dimos.msgs.geometry_msgs.PoseArray import PoseArray
 from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped

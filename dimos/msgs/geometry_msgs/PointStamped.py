@@ -20,25 +20,10 @@ from typing import TYPE_CHECKING, BinaryIO
 if TYPE_CHECKING:
     from rerun._baseclasses import Archetype
 
-from dimos_lcm.geometry_msgs import Point as LCMPoint, PointStamped as LCMPointStamped
+from dimos_lcm.geometry_msgs import PointStamped as LCMPointStamped
 
+from dimos.msgs.geometry_msgs.Point import Point
 from dimos.types.timestamped import Timestamped
-
-
-class Point(LCMPoint):
-    """DimOS wrapper for geometry_msgs.Point (3D position).
-
-    Inherits x/y/z from LCMPoint. Wire-identical to Vector3 but
-    semantically represents a position, not a direction/displacement.
-    """
-
-    msg_name = "geometry_msgs.Point"
-
-    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0) -> None:
-        super().__init__(float(x), float(y), float(z))
-
-    def __repr__(self) -> str:
-        return f"Point(x={self.x}, y={self.y}, z={self.z})"
 
 
 class PointStamped(Point, Timestamped):
