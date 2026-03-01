@@ -55,6 +55,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libatlas-base-dev \
     libeigen3-dev \
     libsuitesparse-dev \
+    # Needed to unpack the autonomy stack zip
+    unzip \
     # ROS packages needed for build
     ros-${ROS_DISTRO}-pcl-ros \
     ros-${ROS_DISTRO}-cv-bridge \
@@ -143,8 +145,10 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
 # Create workspace
 RUN mkdir -p ${WORKSPACE}/src
 
-# Copy autonomy stack source
-COPY docker/navigation/ros-navigation-autonomy-stack ${WORKSPACE}/src/ros-navigation-autonomy-stack
+# Copy autonomy stack as a zip for a stable Docker layer cache.
+# The zip is created once by build.sh and only changes when explicitly deleted.
+COPY docker/navigation/ros-navigation-autonomy-stack.ignore.zip /tmp/nav-stack.zip
+RUN unzip -q /tmp/nav-stack.zip -d ${WORKSPACE}/src && rm /tmp/nav-stack.zip
 
 # On arm64, replace pre-built x86_64 or-tools with arm64 built version
 RUN if [ "${TARGETARCH}" = "arm64" ] && [ -d "/opt/or-tools" ]; then \
