@@ -447,7 +447,7 @@ prompt_setup_method() {
     if [[ "$HAS_NIX" == "1" ]]; then
         choice=$(prompt_select "How should we set up system dependencies?" \
             "System packages — apt/brew (simpler)" \
-            "Nix — nix develop (reproducible)")
+            "Nix — nix develop (reproducible)") || die "cancelled"
     elif [[ "$DETECTED_OS" == "nixos" ]]; then
         die "NixOS detected but 'nix' command not found."
     else
