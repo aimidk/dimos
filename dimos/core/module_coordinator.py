@@ -79,11 +79,12 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
     def deploy(self, module_class: type[ModuleT], *args, **kwargs) -> ModuleProxy:  # type: ignore[no-untyped-def]
         if not self._client:
             raise ValueError("Trying to dimos.deploy before the client has started")
-        module = (
-            DockerModule(module_class, *args, **kwargs)  # type: ignore[assignment]
-            if is_docker_module(module_class)
-            else self._client.deploy(module_class, *args, **kwargs)  # type: ignore[union-attr, attr-defined, assignment]
-        )
+        
+        deployed_module : ModuleProxy
+        if is_docker_module(module_class):
+            deployed_module = DockerModule(module_class, *args, **kwargs)
+        else:
+            deployed_module = self._client.deploy(module_class, *args, **kwargs)
         self._deployed_modules[module_class] = module  # type: ignore[assignment]
         return module  # type: ignore[return-value]
 

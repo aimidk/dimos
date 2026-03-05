@@ -218,12 +218,11 @@ class ModuleBase(Configurable[ModuleConfigT], Resource):
 
     @classproperty
     def rpcs(self) -> dict[str, Callable[..., Any]]:
-        _skip = {"rpcs", "blueprint", "module_info", "io"}
         return {
             name: getattr(self, name)
             for name in dir(self)
             if not name.startswith("_")
-            and name not in _skip
+            and name != "rpcs"  # Exclude the rpcs property itself to prevent recursion
             and callable(getattr(self, name, None))
             and hasattr(getattr(self, name), "__rpc__")
         }

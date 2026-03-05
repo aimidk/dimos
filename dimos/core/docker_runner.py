@@ -25,7 +25,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from dimos.core.module import ModuleConfig
-from dimos.core.rpc_client import RpcCall
+from dimos.core.rpc_client import RpcCall, ModuleProxy
 from dimos.protocol.rpc import LCMRPC
 from dimos.utils.logging_config import setup_logger
 from dimos.visualization.rerun.bridge import RERUN_GRPC_PORT, RERUN_WEB_PORT
@@ -183,7 +183,7 @@ def _extract_module_config(cfg: DockerModuleConfig) -> dict[str, Any]:
 # Host-side Docker-backed Module handle
 
 
-class DockerModule:
+class DockerModule(ModuleProxy):
     """
     Host-side handle for a module running inside Docker.
 
