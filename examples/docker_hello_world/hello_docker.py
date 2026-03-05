@@ -31,11 +31,11 @@ Usage:
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 import subprocess
 import time
 
-from dimos.core.blueprints import autoconnect
 from dimos.core.core import rpc
 from dimos.core.docker_runner import DockerModuleConfig
 from dimos.core.module import Module
@@ -46,6 +46,7 @@ from dimos.core.stream import In, Out
 # ---------------------------------------------------------------------------
 
 
+@dataclass(kw_only=True)
 class HelloDockerConfig(DockerModuleConfig):
     docker_image: str = "dimos-hello-docker:latest"
     docker_file: Path | None = Path(__file__).parent / "Dockerfile"
@@ -53,7 +54,7 @@ class HelloDockerConfig(DockerModuleConfig):
     docker_gpus: str | None = None  # no GPU needed
     docker_rm: bool = True
     docker_restart_policy: str = "no"
-    docker_env: dict[str, str] = {"CI": "1"}  # skip interactive system configurator
+    docker_env: dict[str, str] = field(default_factory=lambda: {"CI": "1"})
 
 
 class HelloDockerModule(Module["HelloDockerConfig"]):
@@ -114,6 +115,8 @@ class PromptModule(Module):
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from dimos.core.blueprints import autoconnect
+
     coordinator = autoconnect(
         PromptModule.blueprint(),
         HelloDockerModule.blueprint(),
@@ -130,5 +133,5 @@ if __name__ == "__main__":
     prompt_mod.prompt.publish("stream test")
     time.sleep(2)
 
-    coordinator.close_all()
+    coordinator.stop()
     print("Done!")

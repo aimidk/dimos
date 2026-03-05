@@ -38,6 +38,7 @@ class DockerWorkerManager:
 
         logger.info("Deploying module in Docker.", module=module_class.__name__)
         dm = DockerModule(module_class, *args, **kwargs)
+        dm.start()  # Docker modules must be running before streams/RPC can be wired
         self._docker_modules.append(dm)
         return dm
 

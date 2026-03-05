@@ -25,16 +25,19 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from dimos.core.docker_build import build_image, image_exists
-from dimos.core.module import Module, ModuleConfig
+from dimos.core.module import ModuleConfig
 from dimos.core.rpc_client import RpcCall
-from dimos.protocol.rpc import LCMRPC
 from dimos.utils.logging_config import setup_logger
-from dimos.visualization.rerun.bridge import RERUN_GRPC_PORT, RERUN_WEB_PORT
+
+# Inlined from dimos.visualization.rerun.bridge to avoid heavy import chain in containers
+RERUN_GRPC_PORT = 9876
+RERUN_WEB_PORT = 9090
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+
+    from dimos.core.module import Module
 
 logger = setup_logger()
 
@@ -186,7 +189,9 @@ class DockerModule:
             or f"dimos_{module_class.__name__.lower()}_{os.getpid()}_{int(time.time())}"
         )
 
-        # RPC setup
+        # RPC setup (lazy import to keep container-side imports light)
+        from dimos.protocol.rpc import LCMRPC
+
         self.rpc = LCMRPC()
         self.rpcs = set(module_class.rpcs.keys())  # type: ignore[attr-defined]
         self.rpc_calls: list[str] = getattr(module_class, "rpc_calls", [])
@@ -194,6 +199,8 @@ class DockerModule:
         self._bound_rpc_calls: dict[str, RpcCall] = {}
 
         # Build image if needed (but don't start - caller must call start() explicitly)
+        from dimos.core.docker_build import build_image, image_exists
+
         if not image_exists(config):
             logger.info(f"Building {config.docker_image}")
             build_image(config)
@@ -400,7 +407,29 @@ class DockerModule:
         if cfg.docker_command:
             return list(cfg.docker_command)
 
-        module_path = f"{self._module_class.__module__}.{self._module_class.__name__}"
+        module_name = self._module_class.__module__
+        if module_name == "__main__":
+            # When run as `python script.py`, __module__ is "__main__".
+            # Resolve to the actual dotted module path so the container can import it.
+            import __main__
+
+            spec = getattr(__main__, "__spec__", None)
+            if spec and spec.name:
+                module_name = spec.name
+            else:
+                # Fallback: derive from file path relative to cwd
+                main_file = getattr(__main__, "__file__", None)
+                if main_file:
+                    import pathlib
+
+                    rel = pathlib.Path(main_file).resolve().relative_to(pathlib.Path.cwd())
+                    module_name = str(rel.with_suffix("")).replace("/", ".")
+                else:
+                    raise RuntimeError(
+                        "Cannot determine module path for __main__. "
+                        "Run with `python -m` or set docker_command explicitly."
+                    )
+        module_path = f"{module_name}.{self._module_class.__name__}"
         # Filter out docker-specific kwargs (paths, etc.) - only pass module config
         kwargs = {"config": _extract_module_config(cfg)}
         payload = {"module_path": module_path, "args": list(self._args), "kwargs": kwargs}
