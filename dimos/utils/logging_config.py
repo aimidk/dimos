@@ -42,13 +42,28 @@ _RUN_LOG_DIR: Path | None = None
 
 
 def set_run_log_dir(log_dir: str | Path) -> None:
-    """Set per-run log directory. Call BEFORE blueprint.build()."""
+    """Set per-run log directory. Call BEFORE blueprint.build().
+
+    Updates the global path AND migrates any existing FileHandlers on
+    stdlib loggers so that logs written after this call go to the new
+    directory.  Workers spawned after this call inherit the env var.
+    """
     global _RUN_LOG_DIR, _LOG_FILE_PATH
     log_dir = Path(log_dir)
     _RUN_LOG_DIR = log_dir
     _RUN_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    _LOG_FILE_PATH = None
+    new_path = log_dir / "main.jsonl"
+    _LOG_FILE_PATH = new_path
     os.environ["DIMOS_RUN_LOG_DIR"] = str(log_dir)
+
+    # Migrate existing FileHandlers to the new path
+    for logger_name in list(logging.Logger.manager.loggerDict):
+        logger_obj = logging.getLogger(logger_name)
+        for handler in logger_obj.handlers:
+            if isinstance(handler, logging.FileHandler) and handler.baseFilename != str(new_path):
+                handler.close()
+                handler.baseFilename = str(new_path)
+                handler.stream = handler._open()
 
 
 def get_run_log_dir() -> Path | None:
