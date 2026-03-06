@@ -12,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""QuadrupedAdapter protocol for joint-level quadruped control.
+"""WholeBodyAdapter protocol for joint-level motor control.
 
-Lightweight protocol for quadruped robots that expose per-motor
+Lightweight protocol for robots that expose per-motor
 position/velocity/torque control (as opposed to TwistBaseAdapter which
 only exposes velocity commands).
 
-Motor ordering follows Unitree convention:
-  FR_0, FR_1, FR_2, FL_0, FL_1, FL_2,
-  RR_0, RR_1, RR_2, RL_0, RL_1, RL_2
+Supports any number of motors — quadrupeds (12 DOF), humanoids (29 DOF), etc.
 """
 
 from __future__ import annotations
@@ -37,20 +35,20 @@ VEL_STOP: float = 16000.0
 class MotorCommand:
     """Command for a single motor."""
 
-    q: float = POS_STOP       # target position (rad)
-    dq: float = VEL_STOP      # target velocity (rad/s)
-    kp: float = 0.0           # position gain
-    kd: float = 0.0           # velocity gain
-    tau: float = 0.0          # feedforward torque (Nm)
+    q: float = POS_STOP  # target position (rad)
+    dq: float = VEL_STOP  # target velocity (rad/s)
+    kp: float = 0.0  # position gain
+    kd: float = 0.0  # velocity gain
+    tau: float = 0.0  # feedforward torque (Nm)
 
 
 @dataclass(frozen=True)
 class MotorState:
     """Feedback from a single motor."""
 
-    q: float = 0.0            # position (rad)
-    dq: float = 0.0           # velocity (rad/s)
-    tau: float = 0.0          # estimated torque (Nm)
+    q: float = 0.0  # position (rad)
+    dq: float = 0.0  # velocity (rad/s)
+    tau: float = 0.0  # estimated torque (Nm)
 
 
 @dataclass(frozen=True)
@@ -64,8 +62,8 @@ class IMUState:
 
 
 @runtime_checkable
-class QuadrupedAdapter(Protocol):
-    """Protocol for joint-level quadruped IO.
+class WholeBodyAdapter(Protocol):
+    """Protocol for joint-level whole-body motor IO.
 
     Implement this per vendor SDK.  All methods use SI units:
     - Position: radians
@@ -91,29 +89,25 @@ class QuadrupedAdapter(Protocol):
     # --- State Reading ---
 
     def read_motor_states(self) -> list[MotorState]:
-        """Read motor states for all 12 leg joints (Go2 ordering)."""
+        """Read motor states for all joints."""
         ...
 
     def read_imu(self) -> IMUState:
         """Read IMU state."""
         ...
 
-    def read_foot_forces(self) -> list[float]:
-        """Read foot force sensors (4 feet)."""
-        ...
-
     # --- Control ---
 
     def write_motor_commands(self, commands: list[MotorCommand]) -> bool:
-        """Write motor commands for all 12 leg joints. Returns success."""
+        """Write motor commands for all joints. Returns success."""
         ...
 
 
 __all__ = [
+    "POS_STOP",
+    "VEL_STOP",
     "IMUState",
     "MotorCommand",
     "MotorState",
-    "POS_STOP",
-    "QuadrupedAdapter",
-    "VEL_STOP",
+    "WholeBodyAdapter",
 ]

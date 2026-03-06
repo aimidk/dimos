@@ -34,16 +34,16 @@ import threading
 import time
 from typing import TYPE_CHECKING
 
-from dimos.hardware.quadrupeds.spec import (
+from dimos.hardware.whole_body.spec import (
+    POS_STOP,
+    VEL_STOP,
     IMUState,
     MotorCommand,
     MotorState,
-    POS_STOP,
-    VEL_STOP,
 )
 
 if TYPE_CHECKING:
-    from dimos.hardware.quadrupeds.registry import QuadrupedAdapterRegistry
+    from dimos.hardware.whole_body.registry import WholeBodyAdapterRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ _NUM_MOTORS = 12
 
 
 class UnitreeGo2LowLevelAdapter:
-    """QuadrupedAdapter implementation for Unitree Go2 — low-level DDS.
+    """WholeBodyAdapter implementation for Unitree Go2 — low-level DDS.
 
     The coordinator's tick loop drives the publish cadence.  Each call to
     ``write_motor_commands()`` updates the ``LowCmd_`` buffer, computes
@@ -93,9 +93,7 @@ class UnitreeGo2LowLevelAdapter:
             from unitree_sdk2py.utils.crc import CRC
 
             # 1. Initialise DDS transport
-            logger.info(
-                f"Initializing DDS (low-level) with interface {self._network_interface}..."
-            )
+            logger.info(f"Initializing DDS (low-level) with interface {self._network_interface}...")
             ChannelFactoryInitialize(self._network_interface)
 
             # 2. Create publisher / subscriber
@@ -248,8 +246,8 @@ class UnitreeGo2LowLevelAdapter:
         logger.info("Sport mode released — low-level control active")
 
 
-def register(registry: QuadrupedAdapterRegistry) -> None:
-    """Register this adapter with the quadruped registry."""
+def register(registry: WholeBodyAdapterRegistry) -> None:
+    """Register this adapter with the whole-body registry."""
     registry.register("unitree_go2", UnitreeGo2LowLevelAdapter)
 
 

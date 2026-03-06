@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""QuadrupedAdapter registry with auto-discovery.
+"""WholeBodyAdapter registry with auto-discovery.
 
 Mirrors the TwistBaseAdapterRegistry pattern: each subpackage provides a
 ``register(registry)`` function in its ``adapter.py`` module.
 
 Usage:
-    from dimos.hardware.quadrupeds.registry import quadruped_adapter_registry
+    from dimos.hardware.whole_body.registry import whole_body_adapter_registry
 
-    adapter = quadruped_adapter_registry.create("unitree_go2")
-    print(quadruped_adapter_registry.available())  # ["unitree_go2"]
+    adapter = whole_body_adapter_registry.create("unitree_go2")
+    print(whole_body_adapter_registry.available())  # ["unitree_go2"]
 """
 
 from __future__ import annotations
@@ -32,26 +32,26 @@ import pkgutil
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from dimos.hardware.quadrupeds.spec import QuadrupedAdapter
+    from dimos.hardware.whole_body.spec import WholeBodyAdapter
 
 logger = logging.getLogger(__name__)
 
 
-class QuadrupedAdapterRegistry:
-    """Registry for quadruped adapters with auto-discovery."""
+class WholeBodyAdapterRegistry:
+    """Registry for whole-body motor adapters with auto-discovery."""
 
     def __init__(self) -> None:
-        self._adapters: dict[str, type[QuadrupedAdapter]] = {}
+        self._adapters: dict[str, type[WholeBodyAdapter]] = {}
 
-    def register(self, name: str, cls: type[QuadrupedAdapter]) -> None:
+    def register(self, name: str, cls: type[WholeBodyAdapter]) -> None:
         """Register an adapter class."""
         self._adapters[name.lower()] = cls
 
-    def create(self, name: str, **kwargs: Any) -> QuadrupedAdapter:
+    def create(self, name: str, **kwargs: Any) -> WholeBodyAdapter:
         """Create an adapter instance by name."""
         key = name.lower()
         if key not in self._adapters:
-            raise KeyError(f"Unknown quadruped adapter: {name}. Available: {self.available()}")
+            raise KeyError(f"Unknown whole-body adapter: {name}. Available: {self.available()}")
         return self._adapters[key](**kwargs)
 
     def available(self) -> list[str]:
@@ -60,32 +60,30 @@ class QuadrupedAdapterRegistry:
 
     def discover(self) -> None:
         """Discover and register adapters from subpackages."""
-        import dimos.hardware.quadrupeds as pkg
+        import dimos.hardware.whole_body as pkg
 
         for _, name, ispkg in pkgutil.iter_modules(pkg.__path__):
             if not ispkg:
                 continue
-            # Walk one level deeper: dimos.hardware.quadrupeds.unitree.go2.adapter
+            # Walk one level deeper: dimos.hardware.whole_body.unitree.go2.adapter
             try:
-                sub = importlib.import_module(f"dimos.hardware.quadrupeds.{name}")
+                sub = importlib.import_module(f"dimos.hardware.whole_body.{name}")
                 for _, sub_name, sub_ispkg in pkgutil.iter_modules(sub.__path__):
                     if not sub_ispkg:
                         continue
                     try:
                         mod = importlib.import_module(
-                            f"dimos.hardware.quadrupeds.{name}.{sub_name}.adapter"
+                            f"dimos.hardware.whole_body.{name}.{sub_name}.adapter"
                         )
                         if hasattr(mod, "register"):
                             mod.register(self)
                     except ImportError as e:
-                        logger.warning(
-                            f"Skipping quadruped adapter {name}.{sub_name}: {e}"
-                        )
+                        logger.warning(f"Skipping whole-body adapter {name}.{sub_name}: {e}")
             except ImportError as e:
-                logger.warning(f"Skipping quadruped package {name}: {e}")
+                logger.warning(f"Skipping whole-body package {name}: {e}")
 
 
-quadruped_adapter_registry = QuadrupedAdapterRegistry()
-quadruped_adapter_registry.discover()
+whole_body_adapter_registry = WholeBodyAdapterRegistry()
+whole_body_adapter_registry.discover()
 
-__all__ = ["QuadrupedAdapterRegistry", "quadruped_adapter_registry"]
+__all__ = ["WholeBodyAdapterRegistry", "whole_body_adapter_registry"]
