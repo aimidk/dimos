@@ -24,9 +24,56 @@ if TYPE_CHECKING:
 
     from .stream import EmbeddingStream, Stream, TextStream
     from .transformer import Transformer
-    from .type import PoseProvider, StreamInfo
+    from .type import PoseProvider
 
 T = TypeVar("T")
+
+
+class StreamNamespace:
+    """Attribute-access proxy for session streams.
+
+    Usage::
+
+        session.streams.image_stream   # same as looking up "image_stream" from list_streams()
+        session.streams["image_stream"]
+        list(session.streams)          # iterate all streams
+        len(session.streams)
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def _load(self) -> dict[str, Stream[Any]]:
+        return {s._backend.stream_name: s for s in self._session.list_streams() if s._backend}
+
+    def __getattr__(self, name: str) -> Stream[Any]:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        streams = self._load()
+        if name in streams:
+            return streams[name]
+        raise AttributeError(
+            f"No stream named {name!r}. Available: {', '.join(streams) or '(none)'}"
+        )
+
+    def __getitem__(self, name: str) -> Stream[Any]:
+        streams = self._load()
+        if name in streams:
+            return streams[name]
+        raise KeyError(name)
+
+    def __iter__(self):
+        return iter(self._load().values())
+
+    def __len__(self) -> int:
+        return len(self._load())
+
+    def __contains__(self, name: str) -> bool:
+        return name in self._load()
+
+    def __repr__(self) -> str:
+        names = list(self._load().keys())
+        return f"StreamNamespace({names})"
 
 
 class Session(Resource):
@@ -34,6 +81,11 @@ class Session(Resource):
 
     Inherits DisposableBase so sessions can be added to CompositeDisposable.
     """
+
+    @property
+    def streams(self) -> StreamNamespace:
+        """Attribute-access namespace for all streams in this session."""
+        return StreamNamespace(self)
 
     def start(self) -> None:
         pass
@@ -71,7 +123,7 @@ class Session(Resource):
         """Get or create an embedding stream with vec0 index."""
 
     @abstractmethod
-    def list_streams(self) -> list[StreamInfo]: ...
+    def list_streams(self) -> list[Stream[Any]]: ...
 
     @abstractmethod
     def materialize_transform(

@@ -410,15 +410,25 @@ class Stream(Generic[T]):
     def summary(self) -> str:
         from datetime import datetime, timezone
 
+        t = self._rich_text()
         n = self.count()
         if n == 0:
-            return f"{self!r}: empty"
+            t.append(": ", style="dim")
+            t.append("empty", style="italic dim")
+            return _render_text(t)
         t0, t1 = self.get_time_range()
         fmt = "%Y-%m-%d %H:%M:%S"
         dt0 = datetime.fromtimestamp(t0, tz=timezone.utc).strftime(fmt)
         dt1 = datetime.fromtimestamp(t1, tz=timezone.utc).strftime(fmt)
         dur = t1 - t0
-        return f"{self!r}: {n} items, {dt0} — {dt1} ({dur:.1f}s)"
+        t.append(": ", style="dim")
+        t.append(f"{n}", style="bold white")
+        t.append(" items, ", style="dim")
+        t.append(dt0, style="bright_blue")
+        t.append(" — ", style="dim")
+        t.append(dt1, style="bright_blue")
+        t.append(f" ({dur:.1f}s)", style="dim yellow")
+        return _render_text(t)
 
     # ── Reactive ──────────────────────────────────────────────────────
 

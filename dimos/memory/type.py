@@ -84,14 +84,6 @@ class EmbeddingObservation(Observation[Embedding]):
         return self.data
 
 
-@dataclass
-class StreamInfo:
-    name: str
-    payload_type: str | None = None
-    count: int = 0
-    stream_kind: str = "stream"
-
-
 # ── Filter types ──────────────────────────────────────────────────────
 
 
