@@ -25,7 +25,6 @@ from dimos.msgs.sensor_msgs import Image
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
 from dimos.protocol.service.system_configurator import ClockSyncConfigurator
 from dimos.robot.unitree.go2.connection import go2_connection
-from dimos.visualization.vis_module import vis_module
 from dimos.web.websocket_vis.websocket_vis_module import websocket_vis
 
 # Mac has some issue with high bandwidth UDP, so we use pSHMTransport for color_image
@@ -94,14 +93,21 @@ rerun_config = {
 }
 
 
-_with_vis = autoconnect(
-    _transports_base,
-    vis_module(
-        global_config.viewer_backend,
-        rerun_config=rerun_config,
-        foxglove_config={"shm_channels": ["/color_image#sensor_msgs.Image"]},
-    ),
-)
+if global_config.viewer == "foxglove":
+    from dimos.robot.foxglove_bridge import foxglove_bridge
+
+    _with_vis = autoconnect(
+        _transports_base,
+        foxglove_bridge(shm_channels=["/color_image#sensor_msgs.Image"]),
+    )
+elif global_config.viewer.startswith("rerun"):
+    from dimos.visualization.rerun.bridge import _resolve_viewer_mode, rerun_bridge
+
+    _with_vis = autoconnect(
+        _transports_base, rerun_bridge(viewer_mode=_resolve_viewer_mode(), **rerun_config)
+    )
+else:
+    _with_vis = _transports_base
 
 unitree_go2_basic = (
     autoconnect(
