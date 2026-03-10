@@ -20,30 +20,20 @@ from dimos.core.blueprints import autoconnect
 from dimos.core.global_config import global_config
 from dimos.core.transport import JpegLcmTransport
 from dimos.msgs.sensor_msgs import Image
-from dimos.protocol.pubsub.encoders import DecodingError
-from dimos.protocol.pubsub.impl.lcmpubsub import LCM, JpegLCM
+from dimos.protocol.pubsub.impl.lcmpubsub import LCM
 from dimos.robot.sim.bridge import sim_bridge
 from dimos.robot.sim.tf_module import sim_tf
 from dimos.web.websocket_vis.websocket_vis_module import websocket_vis
 
 
-class _SafeJpegLCM(JpegLCM):  # type: ignore[misc]
-    """JpegLCM that only decodes image topics, skipping everything else cheaply."""
+class _SimLCM(LCM):  # type: ignore[misc]
+    """LCM that JPEG-decodes image topics and standard-decodes everything else."""
 
     _JPEG_TOPICS = frozenset({"/color_image"})
 
-    def decode(self, msg: bytes, topic: Any) -> Image:  # type: ignore[override]
-        if getattr(topic, "topic", None) not in self._JPEG_TOPICS:
-            raise DecodingError("skip")
-        return super().decode(msg, topic)
-
-
-class _SkipJpegLCM(LCM):  # type: ignore[misc]
-    """Standard LCM that skips JPEG image topics to avoid decode errors."""
-
     def decode(self, msg: bytes, topic: Any) -> Any:  # type: ignore[override]
-        if getattr(topic, "topic", None) in _SafeJpegLCM._JPEG_TOPICS:
-            raise DecodingError("skip")
+        if getattr(topic, "topic", None) in self._JPEG_TOPICS:
+            return Image.lcm_jpeg_decode(msg)
         return super().decode(msg, topic)
 
 
@@ -54,10 +44,39 @@ _transports_base = autoconnect().transports(
 
 
 def _convert_camera_info(camera_info: Any) -> Any:
-    return camera_info.to_rerun(
-        image_topic="/world/color_image",
-        optical_frame="camera_optical",
-    )
+    # Log pinhole under TF tree (3D frustum) — NOT at the image entity.
+    # Pinhole at the image entity blocks rerun's 2D viewer.
+    import rerun as rr
+
+    fx, fy = camera_info.K[0], camera_info.K[4]
+    cx, cy = camera_info.K[2], camera_info.K[5]
+    return [
+        (
+            "world/tf/camera_optical",
+            rr.Pinhole(
+                focal_length=[fx, fy],
+                principal_point=[cx, cy],
+                width=camera_info.width,
+                height=camera_info.height,
+                image_plane_distance=1.0,
+            ),
+        ),
+        (
+            "world/tf/camera_optical",
+            rr.Transform3D(parent_frame="tf#/camera_optical"),
+        ),
+    ]
+
+
+def _convert_color_image(image: Any) -> Any:
+    # Log image at both:
+    #   world/color_image                  — 2D view (no pinhole ancestor)
+    #   world/tf/camera_optical/image      — 3D view (child of pinhole)
+    rerun_data = image.to_rerun()
+    return [
+        ("world/color_image", rerun_data),
+        ("world/tf/camera_optical/image", rerun_data),
+    ]
 
 
 def _convert_global_map(grid: Any) -> Any:
@@ -84,9 +103,10 @@ def _static_base_link(rr: Any) -> list[Any]:
 
 
 rerun_config = {
-    "pubsubs": [_SkipJpegLCM(autoconf=True), _SafeJpegLCM(autoconf=True)],
+    "pubsubs": [_SimLCM(autoconf=True)],
     "visual_override": {
         "world/camera_info": _convert_camera_info,
+        "world/color_image": _convert_color_image,
         "world/global_map": _convert_global_map,
         "world/navigation_costmap": _convert_navigation_costmap,
         "world/pointcloud": None,
