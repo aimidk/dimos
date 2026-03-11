@@ -1,0 +1,83 @@
+/* DUI — DimOS Unified TUI */
+
+Screen {
+    layout: horizontal;
+    background: #0b0f0f;
+}
+
+#sidebar {
+    width: 22;
+    height: 1fr;
+    background: #0b0f0f;
+    padding: 1 0;
+}
+
+.tab-item {
+    width: 100%;
+    height: 3;
+    padding: 1 2;
+    content-align: left middle;
+    background: #0b0f0f;
+    color: #b5e4f4;
+}
+
+.tab-item.--selected-1 {
+    background: #1a2a2a;
+    color: #00eeee;
+}
+
+.tab-item.--selected-2 {
+    background: #1a1a2a;
+    color: #5c9ff0;
+}
+
+.tab-item.--selected-3 {
+    background: #2a1a2a;
+    color: #c07ff0;
+}
+
+#displays {
+    width: 1fr;
+    height: 1fr;
+    layout: horizontal;
+}
+
+.display-pane {
+    width: 1fr;
+    height: 1fr;
+    border: solid #404040;
+    background: #0b0f0f;
+}
+
+.display-pane.--focused {
+    border: solid #00eeee;
+}
+
+#display-2 {
+    display: none;
+}
+
+#display-3 {
+    display: none;
+}
+
+#debug-log {
+    width: 50;
+    height: 1fr;
+    dock: right;
+    border-left: solid #404040;
+    background: #0b0f0f;
+    color: #b5e4f4;
+    padding: 0 1;
+    scrollbar-size: 1 1;
+}
+
+#hint-bar {
+    dock: bottom;
+    height: 1;
+    width: 100%;
+    background: #1a2020;
+    color: #404040;
+    padding: 0 1;
+    content-align: left middle;
+}

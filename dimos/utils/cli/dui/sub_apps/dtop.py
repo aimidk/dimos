@@ -1,0 +1,170 @@
+"""Dtop sub-app — embedded resource monitor."""
+
+from __future__ import annotations
+
+import threading
+import time
+from collections import deque
+from typing import Any
+
+from rich.console import Group, RenderableType
+from rich.panel import Panel
+from rich.rule import Rule
+from rich.text import Text
+from textual.app import ComposeResult
+from textual.containers import VerticalScroll
+from textual.widgets import Static
+
+from dimos.utils.cli import theme
+from dimos.utils.cli.dtop import (
+    ResourceSpyApp,
+    _LABEL_COLOR,
+    _SPARK_WIDTH,
+    _compute_ranges,
+)
+from dimos.utils.cli.dui.sub_app import SubApp
+
+
+class DtopSubApp(SubApp):
+    TITLE = "dtop"
+
+    DEFAULT_CSS = f"""
+    DtopSubApp {{
+        layout: vertical;
+        background: {theme.BACKGROUND};
+    }}
+    DtopSubApp VerticalScroll {{
+        height: 1fr;
+        scrollbar-size: 0 0;
+    }}
+    DtopSubApp VerticalScroll.waiting {{
+        align: center middle;
+    }}
+    DtopSubApp .waiting #dtop-panels {{
+        width: auto;
+    }}
+    DtopSubApp #dtop-panels {{
+        background: transparent;
+    }}
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._lcm: Any = None
+        self._lock = threading.Lock()
+        self._latest: dict[str, Any] | None = None
+        self._last_msg_time: float = 0.0
+        self._cpu_history: dict[str, deque[float]] = {}
+
+    def compose(self) -> ComposeResult:
+        with VerticalScroll(id="dtop-scroll"):
+            yield Static(id="dtop-panels")
+
+    def get_focus_target(self) -> object | None:
+        """Return the VerticalScroll for focus."""
+        try:
+            return self.query_one("#dtop-scroll")
+        except Exception:
+            return super().get_focus_target()
+
+    def on_mount_subapp(self) -> None:
+        self.run_worker(self._init_lcm, exclusive=True, thread=True)
+        self.set_interval(0.5, self._refresh)
+
+    def _init_lcm(self) -> None:
+        """Blocking LCM init — runs in a worker thread."""
+        try:
+            from dimos.protocol.pubsub.impl.lcmpubsub import PickleLCM, Topic
+
+            self._lcm = PickleLCM(autoconf=True)
+            self._lcm.subscribe(Topic("/dimos/resource_stats"), self._on_msg)
+            self._lcm.start()
+        except Exception:
+            pass
+
+    def on_unmount_subapp(self) -> None:
+        if self._lcm:
+            try:
+                self._lcm.stop()
+            except Exception:
+                pass
+            self._lcm = None
+
+    def _on_msg(self, msg: dict[str, Any], _topic: str) -> None:
+        with self._lock:
+            self._latest = msg
+            self._last_msg_time = time.monotonic()
+
+    def _refresh(self) -> None:
+        with self._lock:
+            data = self._latest
+            last_msg = self._last_msg_time
+
+        try:
+            scroll = self.query_one(VerticalScroll)
+        except Exception:
+            return
+        if data is None:
+            scroll.add_class("waiting")
+            waiting = Panel(
+                Text(
+                    "Waiting for resource stats...\nuse `dimos --dtop ...` to emit stats",
+                    style=theme.FOREGROUND,
+                    justify="center",
+                ),
+                border_style=theme.CYAN,
+                expand=False,
+            )
+            self.query_one("#dtop-panels", Static).update(waiting)
+            return
+        scroll.remove_class("waiting")
+
+        stale = (time.monotonic() - last_msg) > 2.0
+        dim = "#606060"
+        border_style = dim if stale else "#777777"
+
+        entries: list[tuple[str, str, dict[str, Any], str, str]] = []
+        coord = data.get("coordinator", {})
+        entries.append(("coordinator", theme.BRIGHT_CYAN, coord, "", str(coord.get("pid", ""))))
+
+        for w in data.get("workers", []):
+            alive = w.get("alive", False)
+            wid = w.get("worker_id", "?")
+            role_style = theme.BRIGHT_GREEN if alive else theme.BRIGHT_RED
+            modules = ", ".join(w.get("modules", [])) or ""
+            entries.append((f"worker {wid}", role_style, w, modules, str(w.get("pid", ""))))
+
+        ranges = _compute_ranges([d for _, _, d, _, _ in entries])
+
+        parts: list[RenderableType] = []
+        for i, (role, rs, d, mods, pid) in enumerate(entries):
+            if role not in self._cpu_history:
+                self._cpu_history[role] = deque(maxlen=_SPARK_WIDTH * 2)
+            if not stale:
+                self._cpu_history[role].append(d.get("cpu_percent", 0))
+            if i > 0:
+                title = Text(" ")
+                title.append(role, style=dim if stale else _LABEL_COLOR)
+                if mods:
+                    title.append(": ", style=dim if stale else _LABEL_COLOR)
+                    title.append(mods, style=dim if stale else rs)
+                if pid:
+                    title.append(f" [{pid}]", style=dim if stale else "#777777")
+                title.append(" ")
+                parts.append(Rule(title=title, style=border_style))
+            parts.extend(
+                ResourceSpyApp._make_lines(d, stale, ranges, self._cpu_history[role])
+            )
+
+        first_role, first_rs, _, first_mods, first_pid = entries[0]
+        panel_title = Text(" ")
+        panel_title.append(first_role, style=dim if stale else _LABEL_COLOR)
+        if first_mods:
+            panel_title.append(": ", style=dim if stale else _LABEL_COLOR)
+            panel_title.append(first_mods, style=dim if stale else first_rs)
+        if first_pid:
+            panel_title.append(f" [{first_pid}]", style=dim if stale else "#777777")
+        panel_title.append(" ")
+
+        panel = Panel(Group(*parts), title=panel_title, border_style=border_style)
+        self.query_one("#dtop-panels", Static).update(panel)

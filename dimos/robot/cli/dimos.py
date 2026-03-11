@@ -487,6 +487,18 @@ def list_blueprints() -> None:
         typer.echo(blueprint_name)
 
 
+@main.command()
+def dio(
+    debug: bool = typer.Option(False, "--debug", help="Show debug panel with key event log"),
+) -> None:
+    """Launch the DimOS Unified TUI."""
+    from dimos.utils.cli.dui.app import main as dui_main
+
+    if debug:
+        sys.argv.append("--debug")
+    dui_main()
+
+
 @main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def lcmspy(ctx: typer.Context) -> None:
     """LCM spy tool for monitoring LCM messages."""
