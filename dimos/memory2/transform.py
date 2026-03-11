@@ -52,6 +52,16 @@ class FnTransformer(Transformer[T, R]):
                 yield result
 
 
+class FnIterTransformer(Transformer[T, R]):
+    """Wraps a bare ``Iterator → Iterator`` callable (e.g. a generator function)."""
+
+    def __init__(self, fn: Callable[[Iterator[Observation[T]]], Iterator[Observation[R]]]) -> None:
+        self._fn = fn
+
+    def __call__(self, upstream: Iterator[Observation[T]]) -> Iterator[Observation[R]]:
+        return self._fn(upstream)
+
+
 class QualityWindow(Transformer[T, T]):
     """Keeps the highest-quality item per time window.
 

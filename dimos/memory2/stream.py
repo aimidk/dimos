@@ -30,7 +30,7 @@ from dimos.memory2.filter import (
     TagsFilter,
     TimeRangeFilter,
 )
-from dimos.memory2.transform import FnTransformer, Transformer
+from dimos.memory2.transform import FnIterTransformer, FnTransformer, Transformer
 from dimos.memory2.type import EmbeddedObservation, Observation
 
 if TYPE_CHECKING:
@@ -161,11 +161,23 @@ class Stream(Generic[T]):
 
     # ── Transform ───────────────────────────────────────────────────
 
-    def transform(self, xf: Transformer[T, R]) -> Stream[R]:
+    def transform(
+        self,
+        xf: Transformer[T, R] | Callable[[Iterator[Observation[T]]], Iterator[Observation[R]]],
+    ) -> Stream[R]:
         """Wrap this stream with a transformer. Returns a new lazy Stream.
 
-        When iterated, calls xf(iter(self)) — pulls lazily through the chain.
+        Accepts a ``Transformer`` subclass or a bare callable / generator
+        function with the same ``Iterator[Obs] → Iterator[Obs]`` signature::
+
+            def detect(upstream):
+                for obs in upstream:
+                    yield obs.derive(data=run_detector(obs.data))
+
+            images.transform(detect).save(detections)
         """
+        if not isinstance(xf, Transformer):
+            xf = FnIterTransformer(xf)
         return Stream(source=self, xf=xf, query=StreamQuery())
 
     # ── Live mode ───────────────────────────────────────────────────

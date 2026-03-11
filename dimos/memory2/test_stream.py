@@ -301,6 +301,29 @@ class TestTransformChaining:
         )
         assert [o.data for o in result] == [22, 26]
 
+    def test_generator_function_transform(self):
+        """A bare generator function works as a transform."""
+
+        def double_all(upstream):
+            for obs in upstream:
+                yield obs.derive(data=obs.data * 2)
+
+        result = make_stream(3).transform(double_all).fetch()
+        assert [o.data for o in result] == [0, 20, 40]
+
+    def test_generator_function_stateful(self):
+        """Generator transforms can accumulate state and yield at their own pace."""
+
+        def running_sum(upstream):
+            total = 0
+            for obs in upstream:
+                total += obs.data
+                yield obs.derive(data=total)
+
+        result = make_stream(3).transform(running_sum).fetch()
+        # 0, 0+10=10, 10+20=30
+        assert [o.data for o in result] == [0, 10, 30]
+
     def test_quality_window(self):
         """QualityWindow keeps the best item per time window."""
         store = MemoryStore()
