@@ -203,7 +203,7 @@ def _compile_query(
         sql += f" ORDER BY {prefix}id ASC"
 
     # Only push LIMIT/OFFSET to SQL when there are no Python post-filters
-    if not python_filters and not query.search_text:
+    if not python_filters:
         if query.limit_val is not None:
             if query.offset_val:
                 sql += f" LIMIT {query.limit_val} OFFSET {query.offset_val}"
@@ -382,6 +382,9 @@ class SqliteBackend(Configurable[BackendConfig], CompositeResource, Generic[T]):
         return self._iterate_snapshot(query)
 
     def _iterate_snapshot(self, query: StreamQuery) -> Iterator[Observation[T]]:
+        if query.search_text is not None:
+            raise NotImplementedError("search_text is not supported by SqliteBackend")
+
         if query.search_vec is not None and self.config.vector_store is not None:
             yield from self._vector_search(query)
             return
@@ -393,17 +396,11 @@ class SqliteBackend(Configurable[BackendConfig], CompositeResource, Generic[T]):
         cur.arraysize = self.config.page_size
         it: Iterator[Observation[T]] = (self._row_to_obs(r, has_blob=join) for r in cur)
 
-        # Text search — requires loading data
-        if query.search_text is not None:
-            needle = query.search_text.lower()
-            it = (obs for obs in it if needle in str(obs.data).lower())
-
         # Apply Python post-filters
         if python_filters:
             it = (obs for obs in it if all(f.matches(obs) for f in python_filters))
 
-        # Apply LIMIT/OFFSET in Python when we couldn't push to SQL
-        if python_filters or query.search_text:
+            # Apply LIMIT/OFFSET in Python when we couldn't push to SQL
             if query.offset_val:
                 it = islice(it, query.offset_val, None)
             if query.limit_val is not None:
@@ -489,7 +486,7 @@ class SqliteBackend(Configurable[BackendConfig], CompositeResource, Generic[T]):
             sub.dispose()
 
     def count(self, query: StreamQuery) -> int:
-        if query.search_vec or query.search_text:
+        if query.search_vec:
             return sum(1 for _ in self.iterate(query))
 
         sql, params, python_filters = _compile_count(query, self._name)

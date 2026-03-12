@@ -260,9 +260,13 @@ class TestStoreBasic:
             s.append("motor fault")
             s.append("temperature ok")
 
-            results = s.search_text("motor").fetch()
-            assert len(results) == 1
-            assert results[0].data == "motor fault"
+            if case.name == "sqlite":
+                with pytest.raises(NotImplementedError):
+                    s.search_text("motor").fetch()
+            else:
+                results = s.search_text("motor").fetch()
+                assert len(results) == 1
+                assert results[0].data == "motor fault"
 
 
 # ── Lazy / eager blob loading tests ──────────────────────────────
