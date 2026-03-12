@@ -1,15 +1,27 @@
+# Copyright 2026 Dimensional Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Tests for SurveillanceStore and SurveillanceSkill."""
 
 from __future__ import annotations
 
 import json
 import os
-import tempfile
 import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # SurveillanceStore tests
@@ -174,18 +186,20 @@ class TestSurveillanceSkill:
         assert "No people" in result
 
     def test_list_people_with_data(self):
-        self._write_roster({
-            "person-1": {
-                "long_term_id": 1,
-                "activity": "working on laptop",
-                "last_seen": time.time(),
-            },
-            "person-2": {
-                "long_term_id": 2,
-                "activity": "talking on phone",
-                "last_seen": time.time() - 300,
-            },
-        })
+        self._write_roster(
+            {
+                "person-1": {
+                    "long_term_id": 1,
+                    "activity": "working on laptop",
+                    "last_seen": time.time(),
+                },
+                "person-2": {
+                    "long_term_id": 2,
+                    "activity": "talking on phone",
+                    "last_seen": time.time() - 300,
+                },
+            }
+        )
         result = self.skill.list_people()
         assert "person-1" in result
         assert "working on laptop" in result
@@ -197,16 +211,25 @@ class TestSurveillanceSkill:
         assert "No surveillance data" in result
 
     def test_query_surveillance_calls_claude(self):
-        self._write_roster({
-            "person-1": {
-                "long_term_id": 1,
-                "activity": "working",
-                "last_seen": time.time(),
+        self._write_roster(
+            {
+                "person-1": {
+                    "long_term_id": 1,
+                    "activity": "working",
+                    "last_seen": time.time(),
+                }
             }
-        })
-        self._write_observations([
-            {"ts": time.time(), "time": "13:00:00", "person_id": "person-1", "activity": "working"}
-        ])
+        )
+        self._write_observations(
+            [
+                {
+                    "ts": time.time(),
+                    "time": "13:00:00",
+                    "person_id": "person-1",
+                    "activity": "working",
+                }
+            ]
+        )
 
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Person-1 is currently working.")]
@@ -227,7 +250,9 @@ class TestSurveillanceSkill:
         assert "What is person-1 doing?" in prompt
 
     def test_query_surveillance_handles_api_error(self):
-        self._write_roster({"person-1": {"activity": "x", "last_seen": time.time(), "long_term_id": 1}})
+        self._write_roster(
+            {"person-1": {"activity": "x", "last_seen": time.time(), "long_term_id": 1}}
+        )
 
         mock_client = MagicMock()
         mock_client.messages.create.side_effect = Exception("API rate limited")
