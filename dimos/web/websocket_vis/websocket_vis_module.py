@@ -152,6 +152,7 @@ class WebsocketVisModule(Module):
         # In-process monitors
         self._agent_monitor: Any = None
         self._lcm_spy: Any = None
+        self._people_monitor: Any = None
         self._lcm_stats_thread: threading.Thread | None = None
         self._lcm_stats_stop: threading.Event = threading.Event()
 
@@ -224,9 +225,10 @@ class WebsocketVisModule(Module):
         # Launch dtop textual-serve (interactive terminal in Dev Tools panel)
         self._launch_spy_tools()
 
-        # In-process monitors: stream agent messages + LCM stats via SocketIO
+        # In-process monitors: stream agent messages + LCM stats + people via SocketIO
         self._start_agent_monitor()
         self._start_lcm_stats_publisher()
+        self._start_people_monitor()
 
         # Always open mission control dashboard in browser
         url = f"http://localhost:{self.port}/mission-control"
@@ -428,6 +430,18 @@ class WebsocketVisModule(Module):
                     },
                 )
 
+            # Build tool names for system prompt
+            tool_names = ", ".join(t["name"] for t in tools) if tools else "none loaded"
+            system_prompt = (
+                "You are an AI assistant integrated into a robot's Mission Control dashboard. "
+                "You have access to real robot skills (MCP tools) that let you control the robot "
+                "and perceive its environment. Available skills: " + tool_names + ". "
+                "When asked to observe, look, see, or check the environment, USE the observe tool — "
+                "you DO have vision capabilities through it. "
+                "When you use a tool successfully, summarize what happened based on the result. "
+                "Keep responses concise (1-3 sentences). Do not deny having capabilities that your tools provide."
+            )
+
             messages = [*list(history), {"role": "user", "content": message}]
 
             # Emit user message to agent feed
@@ -438,6 +452,7 @@ class WebsocketVisModule(Module):
                 client_kw: dict = {
                     "model": "claude-opus-4-6",
                     "max_tokens": 4096,
+                    "system": system_prompt,
                     "messages": messages,
                 }
                 if tools:
@@ -453,6 +468,30 @@ class WebsocketVisModule(Module):
 
             tool_calls_log: list[dict] = []
 
+            def emit_skill(
+                tc_id: str,
+                name: str,
+                args: dict,
+                status: str,
+                result: str = "",
+                duration_ms: int | None = None,
+            ) -> None:
+                ts = time.time()
+                ts_str = time.strftime("%H:%M:%S", time.localtime(ts))
+                self._emit(
+                    "skill_invocation",
+                    {
+                        "id": tc_id,
+                        "name": name,
+                        "args": args,
+                        "status": status,
+                        "result": result,
+                        "duration_ms": duration_ms,
+                        "timestamp": ts,
+                        "timestamp_str": ts_str,
+                    },
+                )
+
             # Handle tool use blocks
             tool_use_blocks = [b for b in first_resp.content if b.type == "tool_use"]
             if tool_use_blocks:
@@ -461,6 +500,8 @@ class WebsocketVisModule(Module):
                     for tb in tool_use_blocks:
                         args_str = str(tb.input)[:120]
                         emit_agent("Tool  ", "blue", f"{tb.name}({args_str})")
+                        emit_skill(tb.id, tb.name, tb.input, "running")
+                        call_start = time.time()
                         try:
                             call_resp = await client.post(
                                 _MCP_URL,
@@ -474,11 +515,22 @@ class WebsocketVisModule(Module):
                             )
                             call_data = call_resp.json()
                             result = call_data.get("result", call_data.get("error", {}))
+                            is_error = "error" in call_data and "result" not in call_data
                         except Exception as e:
                             result = {"error": str(e)}
+                            is_error = True
 
+                        duration_ms = round((time.time() - call_start) * 1000)
                         result_str = str(result)[:200]
                         emit_agent("Tool  ", "red", f"{tb.name}() → {result_str}")
+                        emit_skill(
+                            tb.id,
+                            tb.name,
+                            tb.input,
+                            "error" if is_error else "success",
+                            result_str,
+                            duration_ms,
+                        )
                         tool_calls_log.append(
                             {"name": tb.name, "input": tb.input, "result": result}
                         )
@@ -502,6 +554,7 @@ class WebsocketVisModule(Module):
                         lambda: anthropic.Anthropic().messages.create(
                             model="claude-opus-4-6",
                             max_tokens=4096,
+                            system=system_prompt,
                             messages=messages2,
                         ),
                     )
@@ -638,13 +691,16 @@ class WebsocketVisModule(Module):
 
     def _on_agent_message(self, entry: Any) -> None:
         try:
+            from langchain_core.messages import AIMessage, ToolMessage
+
             from dimos.utils.cli.agentspy.agentspy import (
                 format_message_content,
                 format_timestamp,
                 get_message_type_and_style,
             )
 
-            msg_type, style = get_message_type_and_style(entry.message)
+            msg = entry.message
+            msg_type, style = get_message_type_and_style(msg)
             self._emit(
                 "agent_message",
                 {
@@ -652,11 +708,86 @@ class WebsocketVisModule(Module):
                     "timestamp_str": format_timestamp(entry.timestamp),
                     "type": msg_type.strip(),
                     "style": style,
-                    "content": format_message_content(entry.message),
+                    "content": format_message_content(msg),
                 },
             )
+
+            # Track skill invocations with duration
+            if not hasattr(self, "_pending_tool_calls"):
+                self._pending_tool_calls: dict[str, dict[str, Any]] = {}
+
+            if isinstance(msg, AIMessage) and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    tc_id = tc.get("id", "")
+                    self._pending_tool_calls[tc_id] = {
+                        "name": tc.get("name", "unknown"),
+                        "args": tc.get("args", {}),
+                        "started_at": entry.timestamp,
+                    }
+                    self._emit(
+                        "skill_invocation",
+                        {
+                            "id": tc_id,
+                            "name": tc.get("name", "unknown"),
+                            "args": tc.get("args", {}),
+                            "status": "running",
+                            "timestamp": entry.timestamp,
+                            "timestamp_str": format_timestamp(entry.timestamp),
+                        },
+                    )
+
+            elif isinstance(msg, ToolMessage):
+                tc_id = getattr(msg, "tool_call_id", "")
+                pending = self._pending_tool_calls.pop(tc_id, None)
+                duration_ms = (
+                    round((entry.timestamp - pending["started_at"]) * 1000) if pending else None
+                )
+                is_error = hasattr(msg, "status") and msg.status == "error"
+                self._emit(
+                    "skill_invocation",
+                    {
+                        "id": tc_id,
+                        "name": pending["name"] if pending else getattr(msg, "name", "unknown"),
+                        "args": pending["args"] if pending else {},
+                        "result": str(msg.content)[:200] if msg.content else "",
+                        "status": "error" if is_error else "success",
+                        "duration_ms": duration_ms,
+                        "timestamp": entry.timestamp,
+                        "timestamp_str": format_timestamp(entry.timestamp),
+                    },
+                )
+
         except Exception as e:
             logger.debug(f"agent_message emit error: {e}")
+
+    def _start_people_monitor(self) -> None:
+        """Run PeopleMonitor in-process; forward person sightings as SocketIO events."""
+        try:
+            from hackathon.people_monitor import PeopleMonitor
+
+            self._people_monitor = PeopleMonitor()
+            self._people_monitor.subscribe(self._on_person_sighting)
+            self._people_monitor.start()
+            logger.info("PeopleMonitor started (streaming via SocketIO)")
+        except Exception as e:
+            logger.warning(f"Failed to start PeopleMonitor: {e}", exc_info=True)
+
+        # Wire surveillance store to persist activity observations
+        try:
+            from hackathon.surveillance_store import SurveillanceStore
+
+            self._surveillance_store = SurveillanceStore()
+            self._people_monitor.subscribe(self._surveillance_store.on_person_sighting)
+            logger.info("SurveillanceStore wired to PeopleMonitor")
+        except Exception as e:
+            logger.debug(f"SurveillanceStore wiring skipped: {e}")
+
+    def _on_person_sighting(self, sighting: dict) -> None:
+        """Forward person sighting to dashboard via SocketIO."""
+        try:
+            self._emit("person_sighting", sighting)
+        except Exception as e:
+            logger.debug(f"person_sighting emit error: {e}")
 
     def _start_lcm_stats_publisher(self) -> None:
         """Run GraphLCMSpy in-process; broadcast lcm_stats every 1 s via SocketIO."""
@@ -716,6 +847,11 @@ class WebsocketVisModule(Module):
         if self._agent_monitor is not None:
             try:
                 self._agent_monitor.stop()
+            except Exception:
+                pass
+        if self._people_monitor is not None:
+            try:
+                self._people_monitor.stop()
             except Exception:
                 pass
 
