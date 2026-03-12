@@ -54,7 +54,6 @@ def autoconf(check_only: bool = False) -> None:
 class LCMConfig(BaseConfig):
     ttl: int = 0
     url: str = _DEFAULT_LCM_URL
-    autoconf: bool = True
     lcm: lcm_mod.LCM | None = None
 
 
@@ -118,11 +117,6 @@ class LCMService(Service[_Config]):
                 self.l = self.config.lcm
             else:
                 self.l = lcm_mod.LCM(self.config.url) if self.config.url else lcm_mod.LCM()
-
-        try:
-            autoconf(check_only=not self.config.autoconf)
-        except Exception as e:
-            print(f"Error checking system configuration: {e}")
 
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._lcm_loop)

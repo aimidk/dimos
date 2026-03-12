@@ -13,7 +13,8 @@
 # limitations under the License.
 
 
-from typing import TYPE_CHECKING, Any
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import Field
 from reactivex.disposable import Disposable
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from dimos.core.rpc_client import ModuleProxy
 
 logger = setup_logger()
+_Config = TypeVar("_Config", bound=ModuleConfig)
 
 
 class G1Config(ModuleConfig):
@@ -38,7 +40,34 @@ class G1Config(ModuleConfig):
     connection_type: str = Field(default_factory=lambda m: m["g"].unitree_connection_type)
 
 
-class G1Connection(Module[G1Config]):
+class G1ConnectionBase(Module[_Config], ABC):
+    """Abstract base for G1 connections (real hardware and simulation).
+
+    Modules that depend on G1 connection RPC methods should reference this
+    base class so the blueprint wiring works regardless of which concrete
+    connection is deployed.
+    """
+
+    @rpc
+    @abstractmethod
+    def start(self) -> None:
+        super().start()
+
+    @rpc
+    @abstractmethod
+    def stop(self) -> None:
+        super().stop()
+
+    @rpc
+    @abstractmethod
+    def move(self, twist: Twist, duration: float = 0.0) -> None: ...
+
+    @rpc
+    @abstractmethod
+    def publish_request(self, topic: str, data: dict[str, Any]) -> dict[Any, Any]: ...
+
+
+class G1Connection(G1ConnectionBase[G1Config]):
     default_config = G1Config
 
     cmd_vel: In[Twist]
@@ -93,4 +122,4 @@ def deploy(dimos: ModuleCoordinator, ip: str, local_planner: spec.LocalPlanner) 
     return connection
 
 
-__all__ = ["G1Connection", "deploy", "g1_connection"]
+__all__ = ["G1Connection", "G1ConnectionBase", "deploy", "g1_connection"]
