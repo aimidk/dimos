@@ -51,6 +51,11 @@ CLASSIFY_INTERVAL = 10.0
 # Max persons to track simultaneously
 MAX_PERSONS = 10
 
+# Throttle intervals (seconds)
+CROP_UPDATE_INTERVAL = 5.0  # Only regenerate crop every 5s per person
+RERUN_LOG_INTERVAL = 2.0  # Log to Rerun at most every 2s
+PUBLISH_INTERVAL = 1.0  # Publish sighting at most every 1s per person
+
 # Camera intrinsics (Go2 static camera info)
 _CAM_FX = 819.553492
 _CAM_FY = 820.646595
@@ -111,6 +116,11 @@ class PeopleMonitor:
         self._track_to_person: dict[int, int] = {}  # track_id → long_term_id
         self._next_person_num = 1
         self._lock = threading.Lock()
+
+        # Throttle timestamps
+        self._last_rerun_log: float = 0.0
+        self._last_publish_ts: dict[int, float] = {}  # long_term_id → last publish time
+        self._last_crop_ts: dict[int, float] = {}  # long_term_id → last crop time
 
         # External services
         self._reid = None  # EmbeddingIDSystem — lazy init
@@ -311,16 +321,19 @@ class PeopleMonitor:
             person.bbox = det.bbox
             self._track_to_person[track_id] = long_term_id
 
-            # Get crop thumbnail
-            try:
-                crop = det.cropped_image(padding=10)
-                crop_cv = crop.to_opencv()
-                import cv2
+            # Get crop thumbnail (throttled — expensive JPEG encode)
+            last_crop = self._last_crop_ts.get(long_term_id, 0.0)
+            if (now - last_crop) >= CROP_UPDATE_INTERVAL:
+                try:
+                    crop = det.cropped_image(padding=10)
+                    crop_cv = crop.to_opencv()
+                    import cv2
 
-                _, buf = cv2.imencode(".jpg", crop_cv, [cv2.IMWRITE_JPEG_QUALITY, 60])
-                person.crop_b64 = base64.b64encode(buf.tobytes()).decode()
-            except Exception:
-                pass
+                    _, buf = cv2.imencode(".jpg", crop_cv, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                    person.crop_b64 = base64.b64encode(buf.tobytes()).decode()
+                    self._last_crop_ts[long_term_id] = now
+                except Exception:
+                    pass
 
             # Classify activity if enough time has passed
             needs_classify = (now - person.last_classified) >= CLASSIFY_INTERVAL
@@ -332,14 +345,17 @@ class PeopleMonitor:
                     daemon=True,
                 ).start()
 
-            # Publish sighting
-            self._publish_person(person)
+            # Publish sighting (throttled per person)
+            last_pub = self._last_publish_ts.get(long_term_id, 0.0)
+            if (now - last_pub) >= PUBLISH_INTERVAL:
+                self._publish_person(person)
+                self._last_publish_ts[long_term_id] = now
 
-        # Log all person detections to Rerun (2D boxes + labels on camera view)
-        self._log_to_rerun(person_dets)
-
-        # Log 3D markers in Rerun world view
-        self._log_3d_to_rerun(person_dets)
+        # Log to Rerun (throttled globally)
+        if (now - self._last_rerun_log) >= RERUN_LOG_INTERVAL:
+            self._log_to_rerun(person_dets)
+            self._log_3d_to_rerun(person_dets)
+            self._last_rerun_log = now
 
     def _log_to_rerun(self, person_dets: list) -> None:  # type: ignore[type-arg]
         """Log person detections to Rerun: 2D boxes with activity labels on camera view."""
@@ -447,9 +463,10 @@ class PeopleMonitor:
                     person = self._persons.get(long_term_id)
 
                 if person is None:
-                    logger.warning(
-                        "PeopleMonitor: track_id=%s → long_term_id=%s not in _persons (keys=%s)",
-                        track_id, long_term_id, list(self._persons.keys()),
+                    logger.debug(
+                        "PeopleMonitor: track_id=%s → long_term_id=%s not in _persons",
+                        track_id,
+                        long_term_id,
                     )
                     continue
 
@@ -472,11 +489,14 @@ class PeopleMonitor:
                         colors=colors,
                     ),
                 )
-                logger.warning("PeopleMonitor: logged %d 3D points to world/people", len(positions))
+                logger.debug("PeopleMonitor: logged %d 3D points to world/people", len(positions))
             else:
-                logger.warning("PeopleMonitor: _log_3d_to_rerun - no positions to log (dets=%d)", len(person_dets))
+                logger.debug(
+                    "PeopleMonitor: _log_3d_to_rerun - no positions to log (dets=%d)",
+                    len(person_dets),
+                )
         except Exception as e:
-            logger.warning("PeopleMonitor: _log_3d_to_rerun error: %s", e, exc_info=True)
+            logger.debug("PeopleMonitor: _log_3d_to_rerun error: %s", e, exc_info=True)
 
     def _classify_activity(self, person: PersonState) -> None:
         """Send person crop to Claude Haiku for activity classification."""
@@ -520,8 +540,8 @@ class PeopleMonitor:
                     }
                 )
                 # Keep log bounded
-                if len(person.activity_log) > 50:
-                    person.activity_log = person.activity_log[-50:]
+                if len(person.activity_log) > 20:
+                    person.activity_log = person.activity_log[-20:]
                 # Re-publish with updated activity
                 self._publish_person(person)
         except Exception as e:

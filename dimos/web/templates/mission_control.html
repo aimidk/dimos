@@ -35,6 +35,36 @@
         .status-dot.warn { background: #f1c40f; box-shadow: 0 0 6px #f1c40f88; animation: none; }
         .header-clock { margin-left: auto; font-size: 11px; color: #3d4555; font-variant-numeric: tabular-nums; }
 
+        /* ── Patrol Buttons ── */
+        .patrol-group { display: flex; gap: 6px; align-items: center; }
+        .patrol-btn {
+            height: 22px; padding: 0 10px; border: 1px solid #1e2230; border-radius: 3px;
+            font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: .8px;
+            text-transform: uppercase; cursor: pointer; transition: all .15s ease;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .patrol-btn-start {
+            background: #0a1a0f; color: #2ecc71; border-color: #1a3a25;
+        }
+        .patrol-btn-start:hover { background: #0f2a18; border-color: #2ecc71; }
+        .patrol-btn-start.active {
+            background: #143d20; border-color: #2ecc71; color: #2ecc71;
+            box-shadow: 0 0 8px #2ecc7144;
+        }
+        .patrol-btn-stop {
+            background: #1a0808; color: #ef4444; border-color: #3a1010;
+            display: none;
+        }
+        .patrol-btn-stop:hover { background: #2a0c0c; border-color: #ef4444; }
+        .patrol-btn-stop.visible { display: flex; }
+        .patrol-btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+        .patrol-status {
+            font-size: 10px; color: #2ecc71; letter-spacing: .5px;
+            display: none; align-items: center; gap: 4px;
+        }
+        .patrol-status.visible { display: flex; }
+        .patrol-status .status-dot { width: 5px; height: 5px; }
+
         /* ── Grid: 3 cols × 3 rows ──
            col1 (Rerun)          col2                col3
            Rerun 3D              Skills Feed         People Intelligence
@@ -215,6 +245,15 @@
         </div>
         <div class="header-sep"></div>
         <div class="header-stat"><span id="skill-count">— skills</span></div>
+        <div class="header-sep"></div>
+        <div class="patrol-group">
+            <button class="patrol-btn patrol-btn-start" id="patrol-start" onclick="window._startPatrol()">▶ PATROL</button>
+            <button class="patrol-btn patrol-btn-stop" id="patrol-stop" onclick="window._stopPatrol()">■ STOP</button>
+            <div class="patrol-status" id="patrol-status">
+                <div class="status-dot"></div>
+                <span>PATROLLING</span>
+            </div>
+        </div>
         <div class="header-clock" id="clock">--:--:--</div>
     </div>
 
@@ -389,6 +428,74 @@
         claudeSend.addEventListener('click', sendClaudeMsg);
         claudeInput.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendClaudeMsg(); } });
 
+        // ── Patrol Controls ──
+        let patrolActive = false;
+        let patrolBusy = false;
+        const patrolStartBtn  = document.getElementById('patrol-start');
+        const patrolStopBtn   = document.getElementById('patrol-stop');
+        const patrolStatusEl  = document.getElementById('patrol-status');
+
+        function setPatrolState(active) {
+            patrolActive = active;
+            patrolStartBtn.classList.toggle('active', active);
+            patrolStopBtn.classList.toggle('visible', active);
+            patrolStatusEl.classList.toggle('visible', active);
+            patrolStartBtn.textContent = active ? '▶ PATROLLING' : '▶ PATROL';
+        }
+
+        async function sendPatrolCmd(message) {
+            if (patrolBusy) return;
+            patrolBusy = true;
+            patrolStartBtn.disabled = true;
+            patrolStopBtn.disabled = true;
+
+            addMsg(message, 'cm-user');
+            conversationHistory.push({role:'user', content: message});
+            const thinking = addMsg('thinking…', 'cm-thinking');
+
+            try {
+                const r = await fetch('/api/chat', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({message: message, history: conversationHistory.slice(0,-1)}),
+                    signal: AbortSignal.timeout(120000)
+                });
+                const d = await r.json();
+                thinking.remove();
+                if (d.error) {
+                    addMsg('Error: ' + d.error, 'cm-error');
+                } else {
+                    if (d.tool_calls && d.tool_calls.length) {
+                        const names = d.tool_calls.map(tc => tc.name).join(', ');
+                        addMsg(`Used: ${names}`, 'cm-tool');
+                    }
+                    if (d.response) {
+                        addMsg(d.response, 'cm-assistant');
+                        conversationHistory.push({role:'assistant', content: d.response});
+                    }
+                }
+            } catch(e) {
+                thinking.remove();
+                addMsg('Error: patrol request failed or timed out', 'cm-error');
+            } finally {
+                patrolBusy = false;
+                patrolStartBtn.disabled = false;
+                patrolStopBtn.disabled = false;
+            }
+        }
+
+        window._startPatrol = async function() {
+            if (patrolActive || patrolBusy) return;
+            setPatrolState(true);
+            await sendPatrolCmd('Begin exploration to patrol and survey the area');
+        };
+
+        window._stopPatrol = async function() {
+            if (!patrolActive || patrolBusy) return;
+            setPatrolState(false);
+            await sendPatrolCmd('End exploration and stop patrolling');
+        };
+
         // ── LCM Stats (throttled to 2 Hz) ──
         const lcmDot   = document.getElementById('lcm-dot');
         const lcmLabel = document.getElementById('lcm-label');
@@ -448,6 +555,10 @@
         }
 
         socket.on('skill_invocation', (data) => {
+            // Sync patrol button state from actual skill events
+            if (data.name === 'begin_exploration' && data.status === 'success') setPatrolState(true);
+            if (data.name === 'end_exploration' && data.status === 'success') setPatrolState(false);
+
             const empty = document.getElementById('skills-empty');
             if (empty) empty.remove();
 
