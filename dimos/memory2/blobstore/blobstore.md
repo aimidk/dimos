@@ -6,12 +6,12 @@ Separates payload blob storage from metadata indexing. Observation payloads vary
 
 ```python
 class BlobStore(Resource, ABC):
-    def put(self, stream: str, key: int, data: bytes) -> None: ...
-    def get(self, stream: str, key: int) -> bytes: ...    # raises KeyError if missing
-    def delete(self, stream: str, key: int) -> None: ...  # silent if missing
+    def put(self, stream_name: str, key: int, data: bytes) -> None: ...
+    def get(self, stream_name: str, key: int) -> bytes: ...    # raises KeyError if missing
+    def delete(self, stream_name: str, key: int) -> None: ...  # silent if missing
 ```
 
-- `stream` — stream name (used to organize storage: directories, tables)
+- `stream_name` — stream name (used to organize storage: directories, tables)
 - `key` — observation id
 - `data` — encoded payload bytes (codec handles serialization, blob store handles persistence)
 - Extends `Resource` (start/stop) but does NOT own its dependencies' lifecycle

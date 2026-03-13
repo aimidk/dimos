@@ -34,8 +34,8 @@ class FileBlobStore(BlobStore):
     def __init__(self, root: str | os.PathLike[str]) -> None:
         self._root = Path(root)
 
-    def _path(self, stream: str, key: int) -> Path:
-        return self._root / stream / f"{key}.bin"
+    def _path(self, stream_name: str, key: int) -> Path:
+        return self._root / stream_name / f"{key}.bin"
 
     # ── Resource lifecycle ────────────────────────────────────────
 
@@ -47,18 +47,18 @@ class FileBlobStore(BlobStore):
 
     # ── BlobStore interface ───────────────────────────────────────
 
-    def put(self, stream: str, key: int, data: bytes) -> None:
-        p = self._path(stream, key)
+    def put(self, stream_name: str, key: int, data: bytes) -> None:
+        p = self._path(stream_name, key)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(data)
 
-    def get(self, stream: str, key: int) -> bytes:
-        p = self._path(stream, key)
+    def get(self, stream_name: str, key: int) -> bytes:
+        p = self._path(stream_name, key)
         try:
             return p.read_bytes()
         except FileNotFoundError:
-            raise KeyError(f"No blob for stream={stream!r}, key={key}") from None
+            raise KeyError(f"No blob for stream={stream_name!r}, key={key}") from None
 
-    def delete(self, stream: str, key: int) -> None:
-        p = self._path(stream, key)
+    def delete(self, stream_name: str, key: int) -> None:
+        p = self._path(stream_name, key)
         p.unlink(missing_ok=True)

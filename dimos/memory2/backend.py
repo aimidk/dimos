@@ -117,17 +117,17 @@ class BlobStore(Resource):
     """
 
     @abstractmethod
-    def put(self, stream: str, key: int, data: bytes) -> None:
+    def put(self, stream_name: str, key: int, data: bytes) -> None:
         """Store a blob for the given stream and observation id."""
         ...
 
     @abstractmethod
-    def get(self, stream: str, key: int) -> bytes:
+    def get(self, stream_name: str, key: int) -> bytes:
         """Retrieve a blob by stream name and observation id."""
         ...
 
     @abstractmethod
-    def delete(self, stream: str, key: int) -> None:
+    def delete(self, stream_name: str, key: int) -> None:
         """Delete a blob by stream name and observation id."""
         ...
 

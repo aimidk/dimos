@@ -40,14 +40,14 @@ class SqliteBlobStore(BlobStore):
         self._conn = conn
         self._tables: set[str] = set()
 
-    def _ensure_table(self, stream: str) -> None:
-        if stream in self._tables:
+    def _ensure_table(self, stream_name: str) -> None:
+        if stream_name in self._tables:
             return
         self._conn.execute(
-            f'CREATE TABLE IF NOT EXISTS "{stream}_blob" '
+            f'CREATE TABLE IF NOT EXISTS "{stream_name}_blob" '
             "(id INTEGER PRIMARY KEY, data BLOB NOT NULL)"
         )
-        self._tables.add(stream)
+        self._tables.add(stream_name)
 
     # ── Resource lifecycle ────────────────────────────────────────
 
@@ -59,27 +59,27 @@ class SqliteBlobStore(BlobStore):
 
     # ── BlobStore interface ───────────────────────────────────────
 
-    def put(self, stream: str, key: int, data: bytes) -> None:
-        self._ensure_table(stream)
+    def put(self, stream_name: str, key: int, data: bytes) -> None:
+        self._ensure_table(stream_name)
         self._conn.execute(
-            f'INSERT OR REPLACE INTO "{stream}_blob" (id, data) VALUES (?, ?)',
+            f'INSERT OR REPLACE INTO "{stream_name}_blob" (id, data) VALUES (?, ?)',
             (key, data),
         )
 
-    def get(self, stream: str, key: int) -> bytes:
+    def get(self, stream_name: str, key: int) -> bytes:
         try:
             row = self._conn.execute(
-                f'SELECT data FROM "{stream}_blob" WHERE id = ?', (key,)
+                f'SELECT data FROM "{stream_name}_blob" WHERE id = ?', (key,)
             ).fetchone()
         except Exception:
-            raise KeyError(f"No blob for stream={stream!r}, key={key}")
+            raise KeyError(f"No blob for stream={stream_name!r}, key={key}")
         if row is None:
-            raise KeyError(f"No blob for stream={stream!r}, key={key}")
+            raise KeyError(f"No blob for stream={stream_name!r}, key={key}")
         result: bytes = row[0]
         return result
 
-    def delete(self, stream: str, key: int) -> None:
+    def delete(self, stream_name: str, key: int) -> None:
         try:
-            self._conn.execute(f'DELETE FROM "{stream}_blob" WHERE id = ?', (key,))
+            self._conn.execute(f'DELETE FROM "{stream_name}_blob" WHERE id = ?', (key,))
         except Exception:
             pass
