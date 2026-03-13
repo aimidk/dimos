@@ -75,7 +75,7 @@ class DtopSubApp(SubApp):
 
     def _debug(self, msg: str) -> None:
         try:
-            self.app._log(f"[{theme.BTN_MUTED}]DTOP:[/{theme.BTN_MUTED}] {msg}")  # type: ignore[attr-defined]
+            self.app._dlog(f"[{theme.BTN_MUTED}]DTOP:[/{theme.BTN_MUTED}] {msg}")  # type: ignore[attr-defined]
         except Exception:
             pass
 

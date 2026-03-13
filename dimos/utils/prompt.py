@@ -112,10 +112,11 @@ def confirm(
     if hook is not None:
         result = hook(message, default)
         if result is not None:
+            answer = bool(result)
             if question_id is not None:
                 with _lock:
-                    _answer_cache[question_id] = result
-            return result
+                    _answer_cache[question_id] = answer
+            return answer
 
     # Non-interactive stdin (piped, /dev/null, etc.) — auto-accept default
     if not sys.stdin.isatty():
@@ -160,9 +161,9 @@ def sudo_prompt(message: str = "sudo password required") -> bool:
         hook = _dio_sudo_hook
 
     if hook is not None:
-        result = hook(message)
-        if result is not None:
-            return result
+        hook_result = hook(message)
+        if hook_result is not None:
+            return bool(hook_result)
 
     # Non-interactive stdin — can't prompt for password
     if not sys.stdin.isatty():

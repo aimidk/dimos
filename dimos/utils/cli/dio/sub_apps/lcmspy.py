@@ -54,7 +54,7 @@ class LCMSpySubApp(SubApp):
 
     def _debug(self, msg: str) -> None:
         try:
-            self.app._log(f"[dim]LCMSPY:[/dim] {msg}")  # type: ignore[attr-defined]
+            self.app._dlog(f"[dim]LCMSPY:[/dim] {msg}")  # type: ignore[attr-defined]
         except Exception:
             pass
 

@@ -140,11 +140,11 @@ def launch_blueprint(
     # Create run directory
     run_dir = make_run_dir(instance_name)
 
-    # Dump full config snapshot
-    global_config.update(**config_overrides)
-    (run_dir / "config.json").write_text(
-        json.dumps(global_config.model_dump(mode="json"), indent=2)
-    )
+    # Dump config snapshot without mutating the host's global_config.
+    # The daemon subprocess applies overrides itself from launch_params.json.
+    snapshot = global_config.model_dump(mode="json")
+    snapshot.update(config_overrides)
+    (run_dir / "config.json").write_text(json.dumps(snapshot, indent=2))
 
     # Write launch parameters for the subprocess to read
     launch_params = {

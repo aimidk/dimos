@@ -209,7 +209,7 @@ class StatusSubApp(SubApp):
     def _debug(self, msg: str) -> None:
         """Log to the DIO debug panel if available."""
         try:
-            self.app._log(f"[{theme.BTN_MUTED}]STATUS:[/{theme.BTN_MUTED}] {msg}")  # type: ignore[attr-defined]
+            self.app._dlog(f"[{theme.BTN_MUTED}]STATUS:[/{theme.BTN_MUTED}] {msg}")  # type: ignore[attr-defined]
         except Exception:
             pass
 
@@ -1076,16 +1076,16 @@ class StatusSubApp(SubApp):
                     self.on_launch_started(result.instance_name, result.run_dir)
 
                 self.app.call_from_thread(_after)
-            except Exception:
+            except Exception as e:
 
-                def _err() -> None:
+                def _err(err: Exception = e) -> None:
                     for bid in ("btn-stop", "btn-restart"):
                         try:
                             self.query_one(f"#{bid}", Button).disabled = False
                         except Exception:
                             pass
-                    self.app.call_from_thread(log_widget.write, f"[red]Restart error: {e}[/red]")
-                    self.app.notify(f"Restart failed: {e}", severity="error", timeout=10)
+                    self.app.call_from_thread(log_widget.write, f"[red]Restart error: {err}[/red]")
+                    self.app.notify(f"Restart failed: {err}", severity="error", timeout=10)
                     self._refresh_entries()
                     if self._running_entries:
                         self._selected_name = self._running_entries[0].name

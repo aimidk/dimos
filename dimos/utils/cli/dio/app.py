@@ -113,7 +113,7 @@ class DIOApp(App[None]):
     # Debug log
     # ------------------------------------------------------------------
 
-    def _log(self, msg: str) -> None:
+    def _dlog(self, msg: str) -> None:
         import re
 
         plain = re.sub(r"\[/?[^\]]*\]", "", msg)
@@ -167,9 +167,9 @@ class DIOApp(App[None]):
         self._sync_hint()
         if self._instances:
             self._force_focus_subapp(self._instances[self._panel_idx[0]])
-        self._log(f"[dim]mounted {len(self._instances)} sub-apps, debug={self._debug}[/dim]")
+        self._dlog(f"[dim]mounted {len(self._instances)} sub-apps, debug={self._debug}[/dim]")
         if self._debug_log_path:
-            self._log(f"[dim]log file: {self._debug_log_path}[/dim]")
+            self._dlog(f"[dim]log file: {self._debug_log_path}[/dim]")
 
     async def on_resize(self, _event: Resize) -> None:
         old = self._num_panels
@@ -246,7 +246,7 @@ class DIOApp(App[None]):
         await self._place_instances()
         self._sync_tabs()
         self._force_focus_subapp(self._instances[tab_idx])
-        self._log(
+        self._dlog(
             f"[{theme.DEBUG_ACTION}]ACTION[/{theme.DEBUG_ACTION}] tab_click -> show {self._sub_app_classes[tab_idx].TITLE} in panel {self._focused_panel}"
         )
 
@@ -259,7 +259,7 @@ class DIOApp(App[None]):
         focused_name = type(focused).__name__ if focused else "None"
         focused_id = getattr(focused, "id", None) or ""
         panel = self._panel_for_widget(focused)
-        self._log(
+        self._dlog(
             f"[{theme.DEBUG_KEY}]KEY[/{theme.DEBUG_KEY}] [bold {theme.CYAN}]{event.key!r}[/bold {theme.CYAN}]"
             f"  char={event.character!r}"
             f"  focused=[{theme.DEBUG_FOCUS}]{focused_name}#{focused_id}[/{theme.DEBUG_FOCUS}]"
@@ -306,7 +306,7 @@ class DIOApp(App[None]):
                         await inst.remove()
                     await dest.mount(inst)
                     self._instance_pane[i] = target_panel
-                    self._log(
+                    self._dlog(
                         f"[dim]  moved {self._sub_app_classes[i].TITLE} -> panel{target_panel}[/dim]"
                     )
                 inst.styles.display = "block"
@@ -317,7 +317,7 @@ class DIOApp(App[None]):
             f"p{p}={self._sub_app_classes[self._panel_idx[p]].TITLE}"
             for p in range(self._num_panels)
         )
-        self._log(f"[dim]placed: {names}[/dim]")
+        self._dlog(f"[dim]placed: {names}[/dim]")
 
     _TAB_SELECTED_CLASSES = [f"--selected-{i}" for i in range(1, _MAX_PANELS + 1)]
 
@@ -350,21 +350,21 @@ class DIOApp(App[None]):
     # ------------------------------------------------------------------
 
     async def action_tab_prev(self) -> None:
-        self._log(
+        self._dlog(
             f"[{theme.DEBUG_ACTION}]ACTION[/{theme.DEBUG_ACTION}] tab_prev  panel={self._focused_panel} idx={self._panel_idx[: self._num_panels]}"
         )
         self._clear_quit_pending()
         await self._move_tab(-1)
 
     async def action_tab_next(self) -> None:
-        self._log(
+        self._dlog(
             f"[{theme.DEBUG_ACTION}]ACTION[/{theme.DEBUG_ACTION}] tab_next  panel={self._focused_panel} idx={self._panel_idx[: self._num_panels]}"
         )
         self._clear_quit_pending()
         await self._move_tab(1)
 
     def action_focus_prev_panel(self) -> None:
-        self._log(
+        self._dlog(
             f"[{theme.DEBUG_ACTION}]ACTION[/{theme.DEBUG_ACTION}] focus_prev_panel  (was panel={self._focused_panel})"
         )
         self._clear_quit_pending()
@@ -372,7 +372,7 @@ class DIOApp(App[None]):
         self._focus_panel(new)
 
     def action_focus_next_panel(self) -> None:
-        self._log(
+        self._dlog(
             f"[{theme.DEBUG_ACTION}]ACTION[/{theme.DEBUG_ACTION}] focus_next_panel  (was panel={self._focused_panel})"
         )
         self._clear_quit_pending()
@@ -385,17 +385,17 @@ class DIOApp(App[None]):
         if selected:
             self.copy_to_clipboard(selected)
             self.screen.clear_selection()
-            self._log(
+            self._dlog(
                 f"[{theme.DEBUG_ACTION}]ACTION[/{theme.DEBUG_ACTION}] copy_text (copied to clipboard)"
             )
         else:
-            self._log(
+            self._dlog(
                 f"[{theme.DEBUG_ACTION}]ACTION[/{theme.DEBUG_ACTION}] copy_text -> no selection, treating as quit"
             )
             self._handle_quit_press()
 
     def action_quit_or_esc(self) -> None:
-        self._log(f"[{theme.DEBUG_ACTION}]ACTION[/{theme.DEBUG_ACTION}] quit_or_esc")
+        self._dlog(f"[{theme.DEBUG_ACTION}]ACTION[/{theme.DEBUG_ACTION}] quit_or_esc")
         self._handle_quit_press()
 
     # ------------------------------------------------------------------
@@ -414,7 +414,7 @@ class DIOApp(App[None]):
         actual_name = type(actual).__name__ if actual else "None"
         actual_id = getattr(actual, "id", None) or ""
         actual_panel = self._panel_for_widget(actual)
-        self._log(
+        self._dlog(
             f"  -> FOCUS panel {old}->{panel}  sub-app={self._sub_app_classes[idx].TITLE}"
             f"  actual_focus={actual_name}#{actual_id} in panel={actual_panel}"
         )
@@ -429,7 +429,7 @@ class DIOApp(App[None]):
         if target is not None:
             self.screen.set_focus(target)
         else:
-            self._log(f"[dim]WARNING: no focusable widget in {subapp.TITLE}[/dim]")
+            self._dlog(f"[dim]WARNING: no focusable widget in {subapp.TITLE}[/dim]")
 
     async def _move_tab(self, delta: int) -> None:
         n = len(self._sub_app_classes)
@@ -445,7 +445,7 @@ class DIOApp(App[None]):
             attempts += 1
 
         self._panel_idx[panel] = idx
-        self._log(
+        self._dlog(
             f"  -> MOVE panel={panel} {self._sub_app_classes[old_idx].TITLE}->{self._sub_app_classes[idx].TITLE} "
             f"idx={self._panel_idx[: self._num_panels]}"
         )
@@ -455,7 +455,7 @@ class DIOApp(App[None]):
         actual = self.focused
         actual_name = type(actual).__name__ if actual else "None"
         actual_id = getattr(actual, "id", None) or ""
-        self._log(
+        self._dlog(
             f"  -> after focus: {actual_name}#{actual_id} in panel={self._panel_for_widget(actual)}"
         )
 

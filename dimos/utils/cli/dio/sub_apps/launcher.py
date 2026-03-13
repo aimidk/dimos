@@ -285,9 +285,11 @@ class LauncherSubApp(SubApp):
                 # Run autoconf before spawning the daemon (prompts route through TUI hooks)
                 try:
                     from dimos.protocol.service.lcmservice import autoconf
+
                     _debug_log("_do_launch: running autoconf")
                     autoconf()
                     _debug_log("_do_launch: autoconf done")
+
                     # Autoconf may have changed network config (e.g. enabled
                     # multicast).  Tell all sub-apps to recreate their LCM
                     # connections so they pick up the new config.
@@ -297,21 +299,34 @@ class LauncherSubApp(SubApp):
                                 inst.reinit_lcm()
                             except Exception:
                                 pass
+
                     self.app.call_from_thread(_reinit_all_lcm)
                 except SystemExit:
                     _debug_log("_do_launch: autoconf rejected (critical check declined)")
+
                     def _cancelled() -> None:
                         self._launching = False
                         self._launching_name = None
-                        self.query_one("#launch-status", Static).update("Launch cancelled (system config required)")
-                        self.app.notify("Launch cancelled — system configuration is required", severity="warning", timeout=8)
+                        self.query_one("#launch-status", Static).update(
+                            "Launch cancelled (system config required)"
+                        )
+                        self.app.notify(
+                            "Launch cancelled — system configuration is required",
+                            severity="warning",
+                            timeout=8,
+                        )
                         self._sync_status()
+
                     self.app.call_from_thread(_cancelled)
                     return
                 except Exception as autoconf_err:
                     _debug_log(f"_do_launch: autoconf error: {autoconf_err}")
+
                     def _autoconf_err() -> None:
-                        self.app.notify(f"System config error: {autoconf_err}", severity="error", timeout=10)
+                        self.app.notify(
+                            f"System config error: {autoconf_err}", severity="error", timeout=10
+                        )
+
                     self.app.call_from_thread(_autoconf_err)
                     # Continue with launch — autoconf failure shouldn't block
 

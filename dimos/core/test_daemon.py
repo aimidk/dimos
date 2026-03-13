@@ -257,7 +257,9 @@ class TestSignalHandler:
         assert not (tmp_path / "test-instance" / "current.json").exists()
         coord.stop.assert_called_once()
 
-    def test_signal_handler_tolerates_stop_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_signal_handler_tolerates_stop_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         monkeypatch.setattr("dimos.core.instance_registry._instances_dir", lambda: tmp_path)
 
         info = InstanceInfo(
