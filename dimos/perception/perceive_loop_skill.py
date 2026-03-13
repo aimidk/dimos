@@ -18,10 +18,8 @@ import json
 from threading import RLock
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import HumanMessage
-
-from dimos.agents.agent import AgentSpec
 from dimos.agents.annotation import skill
+from dimos.agents.mcp.tool_stream import ToolStream
 from dimos.core.core import rpc
 from dimos.core.module import Module
 from dimos.core.stream import In
@@ -40,7 +38,6 @@ logger = setup_logger()
 class PerceiveLoopSkill(Module):
     color_image: In[Image]
 
-    _agent_spec: AgentSpec
     _period: float = 0.5  # seconds - how often to run the perceive loop
 
     def __init__(self, **kwargs: Any) -> None:
@@ -50,10 +47,12 @@ class PerceiveLoopSkill(Module):
         self._lookout_subscription: DisposableBase | None = None
         self._model_started: bool = False
         self._lock = RLock()
+        self._tool_stream: ToolStream | None = None
 
     @rpc
     def start(self) -> None:
         super().start()
+        self._tool_stream.start()
 
     @rpc
     def stop(self) -> None:
@@ -83,6 +82,7 @@ class PerceiveLoopSkill(Module):
             self._vl_model.start()
             self._model_started = True
             self._active_lookout = tuple(description_of_things)
+            self._tool_stream = ToolStream("look_out_for")
             self._lookout_subscription = sharpest.subscribe(
                 on_next=self._on_image,
                 on_error=lambda e: logger.exception("Error in perceive loop", exc_info=e),
@@ -124,9 +124,12 @@ class PerceiveLoopSkill(Module):
             self._vl_model.stop()
             self._model_started = False
 
-        self._agent_spec.add_message(
-            HumanMessage(f"Found a match for {active_lookout_str}. Please announce audibly.")
-        )
+        if self._tool_stream is not None:
+            self._tool_stream.send(
+                f"Found a match for {active_lookout_str}. Please announce audibly."
+            )
+            self._tool_stream.stop()
+            self._tool_stream = None
 
     def _stop_lookout(self) -> None:
         with self._lock:
@@ -137,3 +140,6 @@ class PerceiveLoopSkill(Module):
             if self._model_started:
                 self._vl_model.stop()
                 self._model_started = False
+            if self._tool_stream is not None:
+                self._tool_stream.stop()
+                self._tool_stream = None

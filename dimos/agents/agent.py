@@ -48,6 +48,7 @@ class Agent(Module[AgentConfig]):
     agent: Out[BaseMessage]
     human_input: In[str]
     agent_idle: Out[bool]
+    tool_streams: In[dict[str, Any]]
 
     _lock: RLock
     _state_graph: CompiledStateGraph[Any, Any, Any, Any] | None
@@ -77,6 +78,16 @@ class Agent(Module[AgentConfig]):
             self._message_queue.put(HumanMessage(content=string))
 
         self._disposables.add(Disposable(self.human_input.subscribe(_on_human_input)))
+
+        def _on_tool_stream(msg: dict[str, Any]) -> None:
+            if msg.get("type") == "update":
+                tool_name = msg.get("tool_name", "unknown")
+                text = msg.get("text", "")
+                self._message_queue.put(
+                    HumanMessage(content=f"[Tool stream update from '{tool_name}']: {text}")
+                )
+
+        self._disposables.add(Disposable(self.tool_streams.subscribe(_on_tool_stream)))
 
     @rpc
     def stop(self) -> None:

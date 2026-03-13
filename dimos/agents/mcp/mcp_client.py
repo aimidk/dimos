@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 from queue import Empty, Queue
 from threading import Event, RLock, Thread
 import time
@@ -59,6 +60,7 @@ class McpClient(Module[McpClientConfig]):
     _stop_event: Event
     _http_client: httpx.Client
     _seq_ids: SequentialIds
+    _sse_thread: Thread | None
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -74,6 +76,7 @@ class McpClient(Module[McpClientConfig]):
         self._stop_event = Event()
         self._http_client = httpx.Client(timeout=120.0)
         self._seq_ids = SequentialIds()
+        self._sse_thread = None
 
     def __reduce__(self) -> Any:
         return (self.__class__, (), {})
@@ -184,11 +187,15 @@ class McpClient(Module[McpClientConfig]):
             )
             self._thread.start()
 
+        self._start_sse_listener()
+
     @rpc
     def stop(self) -> None:
         self._stop_event.set()
         if self._thread.is_alive():
             self._thread.join(timeout=2.0)
+        if self._sse_thread is not None and self._sse_thread.is_alive():
+            self._sse_thread.join(timeout=2.0)
         self._http_client.close()
         super().stop()
 
@@ -225,6 +232,40 @@ class McpClient(Module[McpClientConfig]):
 
         if self._message_queue.empty():
             self.agent_idle.publish(True)
+
+    def _start_sse_listener(self) -> None:
+        """Connect to the MCP server SSE endpoint to receive tool stream updates."""
+        self._sse_thread = Thread(target=self._sse_loop, name="McpClient-SSE", daemon=True)
+        self._sse_thread.start()
+
+    def _sse_loop(self) -> None:
+        base_url = self.config.mcp_server_url.rsplit("/mcp", 1)[0]
+        sse_url = f"{base_url}/mcp/streams"
+
+        while not self._stop_event.is_set():
+            try:
+                with httpx.Client(timeout=None) as client:
+                    with client.stream("GET", sse_url) as response:
+                        for line in response.iter_lines():
+                            if self._stop_event.is_set():
+                                return
+                            if not line.startswith("data: "):
+                                continue
+                            try:
+                                data = json.loads(line[6:])
+                            except json.JSONDecodeError:
+                                continue
+                            if data.get("type") == "update":
+                                tool_name = data.get("tool_name", "unknown")
+                                text = data.get("text", "")
+                                self._message_queue.put(
+                                    HumanMessage(
+                                        content=(f"[Tool stream update from '{tool_name}']: {text}")
+                                    )
+                                )
+            except Exception:
+                if not self._stop_event.is_set():
+                    time.sleep(1.0)
 
 
 def _append_image_to_history(
