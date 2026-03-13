@@ -283,6 +283,7 @@ class SpyBlobStore(BlobStore):
     """BlobStore that records all calls for verification."""
 
     def __init__(self) -> None:
+        super().__init__()
         self.puts: list[tuple[str, int, bytes]] = []
         self.gets: list[tuple[str, int]] = []
         self.store: dict[tuple[str, int], bytes] = {}
@@ -309,6 +310,7 @@ class SpyVectorStore(VectorStore):
     """VectorStore that records all calls for verification."""
 
     def __init__(self) -> None:
+        super().__init__()
         self.puts: list[tuple[str, int]] = []
         self.searches: list[tuple[str, int]] = []
         self.vectors: dict[str, dict[int, Any]] = {}
@@ -423,3 +425,89 @@ class TestStoreDelegation:
         results = s.search(_emb([0, 1, 0]), k=2).fetch()
         assert len(vec_spy.searches) == 1
         assert results[0].data == "north"
+
+
+# ── Standalone component tests (path= mode, no Store) ────────────
+
+
+class TestStandaloneComponents:
+    """Verify each SQLite component works standalone with path= (no Store needed)."""
+
+    def test_observation_store_standalone(self, tmp_path) -> None:
+        from dimos.memory2.codecs.base import codec_for
+        from dimos.memory2.impl.sqlite import SqliteObservationStore
+        from dimos.memory2.type.observation import Observation
+
+        db = str(tmp_path / "obs.db")
+        codec = codec_for(str)
+        store = SqliteObservationStore(path=db, name="events", codec=codec)
+        try:
+            obs = Observation(id=0, ts=1.0, _data="hello")
+            row_id = store.insert(obs)
+            store.commit()
+            assert row_id == 1
+
+            from dimos.memory2.type.filter import StreamQuery
+
+            results = list(store.query(StreamQuery()))
+            assert len(results) == 1
+            assert results[0].ts == 1.0
+        finally:
+            store.stop()
+
+    def test_blob_store_standalone(self, tmp_path) -> None:
+        from dimos.memory2.blobstore.sqlite import SqliteBlobStore
+
+        db = str(tmp_path / "blob.db")
+        store = SqliteBlobStore(path=db)
+        try:
+            store.put("stream1", 1, b"data1")
+            store.put("stream1", 2, b"data2")
+            assert store.get("stream1", 1) == b"data1"
+            assert store.get("stream1", 2) == b"data2"
+        finally:
+            store.stop()
+
+    def test_vector_store_standalone(self, tmp_path) -> None:
+        import numpy as np
+
+        from dimos.memory2.vectorstore.sqlite import SqliteVectorStore
+        from dimos.models.embedding.base import Embedding
+
+        db = str(tmp_path / "vec.db")
+        store = SqliteVectorStore(path=db)
+        try:
+            emb1 = Embedding(vector=np.array([1, 0, 0], dtype=np.float32))
+            emb2 = Embedding(vector=np.array([0, 1, 0], dtype=np.float32))
+            store.put("vecs", 1, emb1)
+            store.put("vecs", 2, emb2)
+
+            results = store.search("vecs", emb1, k=2)
+            assert len(results) == 2
+            assert results[0][0] == 1  # closest to emb1 is itself
+        finally:
+            store.stop()
+
+    def test_conn_and_path_mutually_exclusive(self, tmp_path) -> None:
+        import sqlite3
+
+        from dimos.memory2.blobstore.sqlite import SqliteBlobStore
+        from dimos.memory2.impl.sqlite import SqliteObservationStore
+        from dimos.memory2.vectorstore.sqlite import SqliteVectorStore
+
+        conn = sqlite3.connect(":memory:")
+        db = str(tmp_path / "test.db")
+
+        with pytest.raises(ValueError, match="either conn or path"):
+            SqliteBlobStore(conn, path=db)
+        with pytest.raises(ValueError, match="either conn or path"):
+            SqliteVectorStore(conn, path=db)
+        with pytest.raises(ValueError, match="either conn or path"):
+            SqliteObservationStore(conn, name="x", path=db)
+        with pytest.raises(ValueError, match="either conn or path"):
+            SqliteBlobStore()
+        with pytest.raises(ValueError, match="either conn or path"):
+            SqliteVectorStore()
+        with pytest.raises(ValueError, match="either conn or path"):
+            SqliteObservationStore(name="x")
+        conn.close()

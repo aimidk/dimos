@@ -15,14 +15,15 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from typing import TYPE_CHECKING
 
+from reactivex.disposable import Disposable
+
 from dimos.memory2.type.backend import VectorStore
-from dimos.memory2.utils import validate_identifier
+from dimos.memory2.utils import open_sqlite_connection, validate_identifier
 
 if TYPE_CHECKING:
-    import sqlite3
-
     from dimos.models.embedding.base import Embedding
 
 
@@ -32,11 +33,24 @@ class SqliteVectorStore(VectorStore):
     Creates one virtual table per stream: ``"{stream}_vec"``.
     Dimensionality is determined lazily on the first ``put()``.
 
-    Does NOT own the connection — lifecycle managed externally.
+    Supports two construction modes:
+
+    - ``SqliteVectorStore(conn)`` — borrows an externally-managed connection.
+    - ``SqliteVectorStore(path="file.db")`` — opens and owns its own connection.
     """
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
-        self._conn = conn
+    def __init__(self, conn: sqlite3.Connection | None = None, *, path: str | None = None) -> None:
+        super().__init__()
+        if conn is not None and path is not None:
+            raise ValueError("Specify either conn or path, not both")
+        if conn is None and path is None:
+            raise ValueError("Specify either conn or path")
+        if conn is not None:
+            self._conn = conn
+        else:
+            assert path is not None
+            self._conn = open_sqlite_connection(path)
+            self.register_disposables(Disposable(action=lambda: self._conn.close()))
         self._tables: dict[str, int] = {}  # stream_name -> dimensionality
 
     def _ensure_table(self, stream_name: str, dim: int) -> None:
@@ -52,9 +66,6 @@ class SqliteVectorStore(VectorStore):
     # ── Resource lifecycle ────────────────────────────────────────
 
     def start(self) -> None:
-        pass
-
-    def stop(self) -> None:
         pass
 
     # ── VectorStore interface ────────────────────────────────────

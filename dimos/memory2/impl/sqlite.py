@@ -20,6 +20,9 @@ import sqlite3
 import threading
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
+from reactivex.disposable import Disposable
+
+from dimos.core.resource import CompositeResource
 from dimos.memory2.backend import Backend
 from dimos.memory2.blobstore.sqlite import SqliteBlobStore
 from dimos.memory2.codecs.base import Codec, codec_for, codec_from_id, codec_id
@@ -34,7 +37,7 @@ from dimos.memory2.type.filter import (
     _xyz,
 )
 from dimos.memory2.type.observation import _UNLOADED, Observation
-from dimos.memory2.utils import validate_identifier
+from dimos.memory2.utils import open_sqlite_connection, validate_identifier
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -230,22 +233,39 @@ def _compile_count(
 # ── SqliteObservationStore ────────────────────────────────────────────────
 
 
-class SqliteObservationStore(Generic[T]):
+class SqliteObservationStore(CompositeResource, Generic[T]):
     """SQLite-backed metadata store for a single stream (table).
 
     Handles only metadata storage and query pushdown.
     Blob/vector/live orchestration is handled by Backend.
+
+    Supports two construction modes:
+
+    - ``SqliteObservationStore(conn, name, codec)`` — borrows an externally-managed connection.
+    - ``SqliteObservationStore(path="file.db", name="x", codec=...)`` — opens and owns its own connection.
     """
 
     def __init__(
         self,
-        conn: sqlite3.Connection,
-        name: str,
-        codec: Codec[Any],
+        conn: sqlite3.Connection | None = None,
+        name: str = "",
+        codec: Codec[Any] | None = None,  # required for read/write, optional for schema-only
         blob_store_conn_match: bool = False,
         page_size: int = 256,
+        *,
+        path: str | None = None,
     ) -> None:
-        self._conn = conn
+        super().__init__()
+        if conn is not None and path is not None:
+            raise ValueError("Specify either conn or path, not both")
+        if conn is None and path is None:
+            raise ValueError("Specify either conn or path")
+        if conn is not None:
+            self._conn = conn
+        else:
+            assert path is not None
+            self._conn = open_sqlite_connection(path)
+            self.register_disposables(Disposable(action=lambda: self._conn.close()))
         self._name = name
         self._codec = codec
         self._blob_store_conn_match = blob_store_conn_match
@@ -254,6 +274,28 @@ class SqliteObservationStore(Generic[T]):
         self._tag_indexes: set[str] = set()
         self._pending_python_filters: list[Any] = []
         self._pending_query: StreamQuery | None = None
+        self._ensure_tables()
+
+    def _ensure_tables(self) -> None:
+        """Create the metadata table and R*Tree index if they don't exist."""
+        self._conn.execute(
+            f'CREATE TABLE IF NOT EXISTS "{self._name}" ('
+            "    id      INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "    ts      REAL    NOT NULL UNIQUE,"
+            "    pose_x  REAL, pose_y REAL, pose_z REAL,"
+            "    pose_qx REAL, pose_qy REAL, pose_qz REAL, pose_qw REAL,"
+            "    tags    BLOB    DEFAULT (jsonb('{}'))"
+            ")"
+        )
+        self._conn.execute(
+            f'CREATE VIRTUAL TABLE IF NOT EXISTS "{self._name}_rtree" USING rtree('
+            "    id,"
+            "    x_min, x_max,"
+            "    y_min, y_max,"
+            "    z_min, z_max"
+            ")"
+        )
+        self._conn.commit()
 
     @property
     def name(self) -> str:
@@ -264,7 +306,9 @@ class SqliteObservationStore(Generic[T]):
         return self._blob_store_conn_match
 
     def _make_loader(self, row_id: int, blob_store: Any) -> Any:
-        name, codec = self._name, self._codec
+        name = self._name
+        codec = self._codec
+        assert codec is not None, "codec is required for data loading"
 
         def loader() -> Any:
             raw = blob_store.get(name, row_id)
@@ -283,6 +327,7 @@ class SqliteObservationStore(Generic[T]):
         tags = json.loads(tags_json) if tags_json else {}
 
         if has_blob and blob_data is not None:
+            assert self._codec is not None, "codec is required for data loading"
             data = self._codec.decode(blob_data)
             return Observation(id=row_id, ts=ts, pose=pose, tags=tags, _data=data)
 
@@ -400,7 +445,7 @@ class SqliteObservationStore(Generic[T]):
         return [self._row_to_obs(r, has_blob=join) for r in rows]
 
     def stop(self) -> None:
-        self._conn.close()
+        super().stop()
 
 
 # ── SqliteStore ──────────────────────────────────────────────────
@@ -434,15 +479,7 @@ class SqliteStore(Store):
 
     def _open_connection(self) -> sqlite3.Connection:
         """Open a new WAL-mode connection with sqlite-vec loaded."""
-        import sqlite_vec
-
-        conn = sqlite3.connect(self.config.path, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.enable_load_extension(True)
-        sqlite_vec.load(conn)
-        conn.enable_load_extension(False)
-        return conn
+        return open_sqlite_connection(self.config.path)
 
     def _create_backend(
         self, name: str, payload_type: type[Any] | None = None, **config: Any
@@ -494,27 +531,6 @@ class SqliteStore(Store):
         # Each backend gets its own connection for WAL-mode concurrency
         backend_conn = self._open_connection()
 
-        # Create metadata table
-        backend_conn.execute(
-            f'CREATE TABLE IF NOT EXISTS "{name}" ('
-            "    id      INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "    ts      REAL    NOT NULL UNIQUE,"
-            "    pose_x  REAL, pose_y REAL, pose_z REAL,"
-            "    pose_qx REAL, pose_qy REAL, pose_qz REAL, pose_qw REAL,"
-            "    tags    BLOB    DEFAULT (jsonb('{}'))"
-            ")"
-        )
-        # R*Tree spatial index for pose queries
-        backend_conn.execute(
-            f'CREATE VIRTUAL TABLE IF NOT EXISTS "{name}_rtree" USING rtree('
-            "    id,"
-            "    x_min, x_max,"
-            "    y_min, y_max,"
-            "    z_min, z_max"
-            ")"
-        )
-        backend_conn.commit()
-
         # Create per-backend stores wrapping the backend's own connection
         bs = config.get("blob_store")
         if bs is None:
@@ -544,9 +560,7 @@ class SqliteStore(Store):
             notifier=config.get("notifier"),
             eager_blobs=config.get("eager_blobs", False),
         )
-        from reactivex.disposable import Disposable
-
-        self.register_disposables(Disposable(action=lambda: metadata_store.stop()))
+        self.register_disposables(Disposable(action=lambda: backend_conn.close()))
         return backend
 
     def list_streams(self) -> list[str]:

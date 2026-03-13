@@ -30,6 +30,7 @@ class MemoryVectorStore(VectorStore):
     """
 
     def __init__(self) -> None:
+        super().__init__()
         self._vectors: dict[str, dict[int, Embedding]] = {}
 
     # ── Resource lifecycle ────────────────────────────────────────

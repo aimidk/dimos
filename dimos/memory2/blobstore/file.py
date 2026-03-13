@@ -33,6 +33,7 @@ class FileBlobStore(BlobStore):
     """
 
     def __init__(self, root: str | os.PathLike[str]) -> None:
+        super().__init__()
         self._root = Path(root)
 
     def _path(self, stream_name: str, key: int) -> Path:

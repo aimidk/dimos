@@ -17,7 +17,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, Protocol, TypeVar, runtime_checkable
 
-from dimos.core.resource import Resource
+from dimos.core.resource import CompositeResource
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -85,7 +85,7 @@ class Notifier(ABC, Generic[T]):
 # ── Blob storage ──────────────────────────────────────────────────
 
 
-class BlobStore(Resource):
+class BlobStore(CompositeResource):
     """Persistent storage for encoded payload blobs.
 
     Separates payload data from metadata indexing so that large blobs
@@ -111,7 +111,7 @@ class BlobStore(Resource):
 # ── Vector storage ───────────────────────────────────────────────
 
 
-class VectorStore(Resource):
+class VectorStore(CompositeResource):
     """Pluggable storage and ANN index for embedding vectors.
 
     Separates vector indexing from metadata so backends can swap

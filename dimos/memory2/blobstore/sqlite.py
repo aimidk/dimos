@@ -14,13 +14,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import sqlite3
+
+from reactivex.disposable import Disposable
 
 from dimos.memory2.type.backend import BlobStore
-from dimos.memory2.utils import validate_identifier
-
-if TYPE_CHECKING:
-    import sqlite3
+from dimos.memory2.utils import open_sqlite_connection, validate_identifier
 
 
 class SqliteBlobStore(BlobStore):
@@ -33,12 +32,26 @@ class SqliteBlobStore(BlobStore):
             data BLOB NOT NULL
         );
 
-    Does NOT own the connection — lifecycle managed externally.
+    Supports two construction modes:
+
+    - ``SqliteBlobStore(conn)`` — borrows an externally-managed connection.
+    - ``SqliteBlobStore(path="file.db")`` — opens and owns its own connection.
+
     Does NOT commit; the caller (typically Backend) is responsible for commits.
     """
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
-        self._conn = conn
+    def __init__(self, conn: sqlite3.Connection | None = None, *, path: str | None = None) -> None:
+        super().__init__()
+        if conn is not None and path is not None:
+            raise ValueError("Specify either conn or path, not both")
+        if conn is None and path is None:
+            raise ValueError("Specify either conn or path")
+        if conn is not None:
+            self._conn = conn
+        else:
+            assert path is not None
+            self._conn = open_sqlite_connection(path)
+            self.register_disposables(Disposable(action=lambda: self._conn.close()))
         self._tables: set[str] = set()
 
     def _ensure_table(self, stream_name: str) -> None:
@@ -54,9 +67,6 @@ class SqliteBlobStore(BlobStore):
     # ── Resource lifecycle ────────────────────────────────────────
 
     def start(self) -> None:
-        pass
-
-    def stop(self) -> None:
         pass
 
     # ── BlobStore interface ───────────────────────────────────────
