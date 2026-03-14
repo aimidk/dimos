@@ -29,8 +29,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from dimos.manipulation.planning.spec.enums import IKStatus
+from dimos.manipulation.planning.spec.models import IKResult, WorldRobotID
 from dimos.manipulation.planning.spec.protocols import WorldSpec
-from dimos.manipulation.planning.spec.types import IKResult, WorldRobotID
 from dimos.manipulation.planning.utils.kinematics_utils import (
     check_singularity,
     compute_error_twist,

@@ -181,7 +181,7 @@ class Detection3DModule(Detection2DModule):
             transform = self.tf.get("camera_optical", pc.frame_id, detections.image.ts, 5.0)
             return self.process_frame(detections, pc, transform)
 
-        self.detection_stream_3d = align_timestamped(
+        self.detection_stream_3d = align_timestamped(  # type: ignore[type-var]
             backpressure(self.detection_stream_2d()),
             self.pointcloud.observable(),  # type: ignore[no-untyped-call]
             match_tolerance=0.25,

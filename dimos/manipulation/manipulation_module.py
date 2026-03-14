@@ -38,8 +38,8 @@ from dimos.manipulation.planning.factory import create_kinematics, create_planne
 from dimos.manipulation.planning.monitor.world_monitor import WorldMonitor
 from dimos.manipulation.planning.spec.config import RobotModelConfig
 from dimos.manipulation.planning.spec.enums import ObstacleType
+from dimos.manipulation.planning.spec.models import JointPath, Obstacle, RobotName, WorldRobotID
 from dimos.manipulation.planning.spec.protocols import KinematicsSpec, PlannerSpec
-from dimos.manipulation.planning.spec.types import JointPath, Obstacle, RobotName, WorldRobotID
 from dimos.manipulation.planning.trajectory_generator.joint_trajectory_generator import (
     JointTrajectoryGenerator,
 )

@@ -27,8 +27,8 @@ import numpy as np
 
 from dimos.manipulation.planning.spec.config import RobotModelConfig
 from dimos.manipulation.planning.spec.enums import ObstacleType
+from dimos.manipulation.planning.spec.models import JointPath, Obstacle, WorldRobotID
 from dimos.manipulation.planning.spec.protocols import WorldSpec
-from dimos.manipulation.planning.spec.types import JointPath, Obstacle, WorldRobotID
 from dimos.manipulation.planning.utils.mesh_utils import prepare_urdf_for_drake
 from dimos.utils.logging_config import setup_logger
 

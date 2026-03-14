@@ -42,11 +42,12 @@ from dimos.msgs.sensor_msgs.Image import Image, sharpness_barrier
 from dimos.msgs.visualization_msgs.EntityMarkers import EntityMarkers, Marker
 from dimos.utils.logging_config import get_run_log_dir, setup_logger
 
-from . import temporal_utils as tu
 from .clip_filter import CLIP_AVAILABLE, adaptive_keyframes
 from .entity_graph_db import EntityGraphDB
 from .frame_window_accumulator import Frame, FrameWindowAccumulator
 from .temporal_state import TemporalState
+from .temporal_utils.graph_utils import build_graph_context, extract_time_window
+from .temporal_utils.helpers import is_scene_stale
 from .window_analyzer import WindowAnalyzer
 
 try:
@@ -375,7 +376,7 @@ class TemporalMemory(Module[TemporalMemoryConfig]):
         w_start, w_end = window_frames[0].timestamp_s, window_frames[-1].timestamp_s
 
         # Skip stale scenes (frames too close together / camera not moving)
-        if tu.is_scene_stale(window_frames, self.config.stale_scene_threshold):
+        if is_scene_stale(window_frames, self.config.stale_scene_threshold):
             logger.info(f"[temporal-memory] skipping stale window [{w_start:.1f}-{w_end:.1f}s]")
             return
 
@@ -552,13 +553,13 @@ class TemporalMemory(Module[TemporalMemoryConfig]):
 
         # Graph context
         if self._graph_db:
-            time_window_s = tu.extract_time_window(question)
+            time_window_s = extract_time_window(question)
             all_entity_ids = [
                 e["id"] for e in snap.entity_roster if isinstance(e, dict) and "id" in e
             ]
             if all_entity_ids:
                 logger.info(f"query: building graph context for {len(all_entity_ids)} entities")
-                graph_context = tu.build_graph_context(
+                graph_context = build_graph_context(
                     graph_db=self._graph_db,
                     entity_ids=all_entity_ids,
                     time_window_s=time_window_s,

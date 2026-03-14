@@ -34,13 +34,13 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from dimos.manipulation.planning.spec.config import RobotModelConfig
-    from dimos.manipulation.planning.spec.protocols import WorldSpec
-    from dimos.manipulation.planning.spec.types import (
+    from dimos.manipulation.planning.spec.models import (
         CollisionObjectMessage,
         JointPath,
         Obstacle,
         WorldRobotID,
     )
+    from dimos.manipulation.planning.spec.protocols import WorldSpec
     from dimos.msgs.vision_msgs.Detection3D import Detection3D
     from dimos.perception.detection.type.detection3d.object import Object
 

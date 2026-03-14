@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from dimos.manipulation.planning.spec.config import RobotModelConfig
-    from dimos.manipulation.planning.spec.types import (
+    from dimos.manipulation.planning.spec.models import (
         IKResult,
         JointPath,
         Obstacle,

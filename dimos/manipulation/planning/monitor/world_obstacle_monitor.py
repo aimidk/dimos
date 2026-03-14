@@ -30,7 +30,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from dimos.manipulation.planning.spec.enums import ObstacleType
-from dimos.manipulation.planning.spec.types import CollisionObjectMessage, Obstacle
+from dimos.manipulation.planning.spec.models import CollisionObjectMessage, Obstacle
 from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
 from dimos.utils.logging_config import setup_logger
 
