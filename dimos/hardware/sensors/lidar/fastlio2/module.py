@@ -68,6 +68,11 @@ class FastLio2Config(NativeModuleConfig):
     lidar_ip: str = "192.168.1.155"
     frequency: float = 10.0
 
+    # Initial pose offset [x, y, z, qx, qy, qz, qw] applied to all SLAM outputs.
+    # Set z to sensor mount height above ground for correct terrain analysis.
+    # Quaternion (qx, qy, qz, qw) for angled mounts; identity = [0,0,0, 0,0,0,1].
+    init_pose: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+
     # Frame IDs for output messages
     frame_id: str = "map"
     child_frame_id: str = "body"

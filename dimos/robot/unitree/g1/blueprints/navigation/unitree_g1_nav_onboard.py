@@ -85,6 +85,8 @@ unitree_g1_nav_onboard = (
         FastLio2.blueprint(
             host_ip=os.getenv("LIDAR_HOST_IP", "192.168.123.5"),
             lidar_ip=os.getenv("LIDAR_IP", "192.168.123.120"),
+            init_pose=[0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 1.0],  # G1 lidar mount height
+            map_freq=1.0,  # Publish global map at 1 Hz
         ),
         SensorScanGeneration.blueprint(),
         TerrainAnalysis.blueprint(
