@@ -41,10 +41,6 @@ from dimos.core.docker_runner import DockerModuleConfig
 from dimos.core.module import Module
 from dimos.core.stream import In, Out
 
-# ---------------------------------------------------------------------------
-# Docker module (runs inside container)
-# ---------------------------------------------------------------------------
-
 
 @dataclass(kw_only=True)
 class HelloDockerConfig(DockerModuleConfig):
@@ -100,11 +96,6 @@ class HelloDockerModule(Module["HelloDockerConfig"]):
         return self.config.greeting_prefix
 
 
-# ---------------------------------------------------------------------------
-# Host-side module (sends prompts and prints greetings)
-# ---------------------------------------------------------------------------
-
-
 class PromptModule(Module):
     """Publishes prompts and listens to greetings."""
 
@@ -124,10 +115,6 @@ class PromptModule(Module):
     def _on_greeting(self, text: str) -> None:
         print(f"[PromptModule] Received: {text}")
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     from dimos.core.blueprints import autoconnect
