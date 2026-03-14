@@ -46,7 +46,7 @@ class TestRegistryStore:
         from dimos.memory2.utils.sqlite import open_sqlite_connection
 
         conn = open_sqlite_connection(str(tmp_path / "reg.db"))
-        reg = RegistryStore(conn)
+        reg = RegistryStore(conn=conn)
 
         config = {"payload_module": "builtins.str", "codec_id": "pickle"}
         reg.put("my_stream", config)
@@ -58,7 +58,7 @@ class TestRegistryStore:
         from dimos.memory2.utils.sqlite import open_sqlite_connection
 
         conn = open_sqlite_connection(str(tmp_path / "reg.db"))
-        reg = RegistryStore(conn)
+        reg = RegistryStore(conn=conn)
         assert reg.get("nonexistent") is None
         conn.close()
 
@@ -66,7 +66,7 @@ class TestRegistryStore:
         from dimos.memory2.utils.sqlite import open_sqlite_connection
 
         conn = open_sqlite_connection(str(tmp_path / "reg.db"))
-        reg = RegistryStore(conn)
+        reg = RegistryStore(conn=conn)
         reg.put("a", {"x": 1})
         reg.put("b", {"x": 2})
         assert sorted(reg.list_streams()) == ["a", "b"]
@@ -76,7 +76,7 @@ class TestRegistryStore:
         from dimos.memory2.utils.sqlite import open_sqlite_connection
 
         conn = open_sqlite_connection(str(tmp_path / "reg.db"))
-        reg = RegistryStore(conn)
+        reg = RegistryStore(conn=conn)
         reg.put("x", {"y": 1})
         reg.delete("x")
         assert reg.get("x") is None
@@ -86,7 +86,7 @@ class TestRegistryStore:
         from dimos.memory2.utils.sqlite import open_sqlite_connection
 
         conn = open_sqlite_connection(str(tmp_path / "reg.db"))
-        reg = RegistryStore(conn)
+        reg = RegistryStore(conn=conn)
         reg.put("x", {"v": 1})
         reg.put("x", {"v": 2})
         assert reg.get("x") == {"v": 2}
@@ -95,7 +95,7 @@ class TestRegistryStore:
 
 class TestComponentSerialization:
     def test_sqlite_observation_store_config(self) -> None:
-        cfg = SqliteObservationStoreConfig(page_size=512)
+        cfg = SqliteObservationStoreConfig(page_size=512, path="test.db")
         dumped = cfg.model_dump()
         restored = SqliteObservationStoreConfig(**dumped)
         assert restored.page_size == 512
@@ -155,7 +155,7 @@ class TestBackendSerialization:
         from dimos.memory2.observationstore.memory import ListObservationStore
 
         backend = Backend(
-            metadata_store=ListObservationStore("test"),
+            metadata_store=ListObservationStore(name="test"),
             codec=PickleCodec(),
             blob_store=FileBlobStore(root=str(tmp_path / "blobs")),
             notifier=SubjectNotifier(),

@@ -83,7 +83,7 @@ class Store(Configurable[StoreConfig], CompositeResource):
         # Instantiate or use provided instances
         obs = config.pop("observation_store", self.config.observation_store)
         if obs is None or isinstance(obs, type):
-            obs = (obs or ListObservationStore)(name)
+            obs = (obs or ListObservationStore)(name=name)
             obs.start()
 
         bs = config.pop("blob_store", self.config.blob_store)

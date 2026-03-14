@@ -28,7 +28,7 @@ from dimos.memory2.type.observation import Observation
 
 
 def _make_backend(name: str = "test") -> Backend[int]:
-    return Backend(metadata_store=ListObservationStore[int](name), codec=PickleCodec())
+    return Backend(metadata_store=ListObservationStore[int](name=name), codec=PickleCodec())
 
 
 def make_stream(n: int = 5, start_ts: float = 0.0) -> Stream[int]:

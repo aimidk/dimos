@@ -21,6 +21,10 @@ import json
 import sqlite3
 from typing import Any
 
+from pydantic import Field
+
+from dimos.protocol.service.spec import BaseConfig, Configurable
+
 
 def qual(cls: type) -> str:
     """Fully qualified class name, e.g. 'dimos.memory2.blobstore.sqlite.SqliteBlobStore'."""
@@ -35,11 +39,19 @@ def deserialize_component(data: dict[str, Any]) -> Any:
     return cls(**data["config"])
 
 
-class RegistryStore:
+class RegistryStoreConfig(BaseConfig):
+    conn: sqlite3.Connection | None = Field(default=None, exclude=True)
+
+
+class RegistryStore(Configurable[RegistryStoreConfig]):
     """SQLite persistence for stream name -> config JSON."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
-        self._conn = conn
+    default_config: type[RegistryStoreConfig] = RegistryStoreConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        assert self.config.conn is not None, "conn is required"
+        self._conn: sqlite3.Connection = self.config.conn
         self._conn.execute(
             "CREATE TABLE IF NOT EXISTS _streams ("
             "    name   TEXT PRIMARY KEY,"

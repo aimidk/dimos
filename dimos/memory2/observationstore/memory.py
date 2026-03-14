@@ -15,9 +15,9 @@
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from dimos.memory2.observationstore.base import ObservationStore
+from dimos.memory2.observationstore.base import ObservationStore, ObservationStoreConfig
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -28,12 +28,19 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+class ListObservationStoreConfig(ObservationStoreConfig):
+    name: str = "<memory>"
+
+
 class ListObservationStore(ObservationStore[T]):
     """In-memory metadata store for experimentation. Thread-safe."""
 
-    def __init__(self, name: str = "<memory>") -> None:
-        super().__init__()
-        self._name = name
+    default_config = ListObservationStoreConfig
+    config: ListObservationStoreConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._name = self.config.name
         self._observations: list[Observation[T]] = []
         self._next_id = 0
         self._lock = threading.Lock()

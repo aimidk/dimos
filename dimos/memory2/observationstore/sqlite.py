@@ -20,11 +20,11 @@ import sqlite3
 import threading
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from pydantic import Field, model_validator
 from reactivex.disposable import Disposable
 
 from dimos.memory2.codecs.base import Codec
-from dimos.memory2.observationstore.base import ObservationStore
-from dimos.memory2.registry import qual
+from dimos.memory2.observationstore.base import ObservationStore, ObservationStoreConfig
 from dimos.memory2.type.filter import (
     AfterFilter,
     AtFilter,
@@ -36,7 +36,6 @@ from dimos.memory2.type.filter import (
 )
 from dimos.memory2.type.observation import _UNLOADED, Observation
 from dimos.memory2.utils.sqlite import open_sqlite_connection
-from dimos.protocol.service.spec import BaseConfig
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -226,8 +225,21 @@ def _compile_count(
     return (sql, params, python_filters)
 
 
-class SqliteObservationStoreConfig(BaseConfig):
+class SqliteObservationStoreConfig(ObservationStoreConfig):
+    conn: sqlite3.Connection | None = Field(default=None, exclude=True)
+    name: str = ""
+    codec: Codec[Any] | None = Field(default=None, exclude=True)
+    blob_store_conn_match: bool = Field(default=False, exclude=True)
     page_size: int = 256
+    path: str | None = None
+
+    @model_validator(mode="after")
+    def _conn_xor_path(self) -> SqliteObservationStoreConfig:
+        if self.conn is not None and self.path is not None:
+            raise ValueError("Specify either conn or path, not both")
+        if self.conn is None and self.path is None:
+            raise ValueError("Specify either conn or path")
+        return self
 
 
 class SqliteObservationStore(ObservationStore[T]):
@@ -238,32 +250,21 @@ class SqliteObservationStore(ObservationStore[T]):
 
     Supports two construction modes:
 
-    - ``SqliteObservationStore(conn, name, codec)`` — borrows an externally-managed connection.
+    - ``SqliteObservationStore(conn=conn, name="x", codec=...)`` — borrows an externally-managed connection.
     - ``SqliteObservationStore(path="file.db", name="x", codec=...)`` — opens and owns its own connection.
     """
 
-    def __init__(
-        self,
-        conn: sqlite3.Connection | None = None,
-        name: str = "",
-        codec: Codec[Any] | None = None,  # required for read/write, optional for schema-only
-        blob_store_conn_match: bool = False,
-        page_size: int = 256,
-        *,
-        path: str | None = None,
-    ) -> None:
-        super().__init__()
-        if conn is not None and path is not None:
-            raise ValueError("Specify either conn or path, not both")
-        if conn is None and path is None:
-            raise ValueError("Specify either conn or path")
-        self._conn: sqlite3.Connection = conn  # type: ignore[assignment]  # set in start() if None
-        self._path = path
-        self._name = name
-        self._codec = codec
-        self._blob_store_conn_match = blob_store_conn_match
-        self._config = SqliteObservationStoreConfig(page_size=page_size)
-        self._page_size = page_size
+    default_config = SqliteObservationStoreConfig
+    config: SqliteObservationStoreConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._conn: sqlite3.Connection = self.config.conn  # type: ignore[assignment]  # set in start() if None
+        self._path = self.config.path
+        self._name = self.config.name
+        self._codec = self.config.codec
+        self._blob_store_conn_match = self.config.blob_store_conn_match
+        self._page_size = self.config.page_size
         self._lock = threading.Lock()
         self._tag_indexes: set[str] = set()
         self._pending_python_filters: list[Any] = []
@@ -439,12 +440,6 @@ class SqliteObservationStore(ObservationStore[T]):
 
         rows = self._conn.execute(sql, ids).fetchall()
         return [self._row_to_obs(r, has_blob=join) for r in rows]
-
-    def serialize(self) -> dict[str, Any]:
-        return {
-            "class": qual(type(self)),
-            "config": self._config.model_dump(),
-        }
 
     def stop(self) -> None:
         super().stop()

@@ -258,7 +258,7 @@ class TestBlobLoading:
         from dimos.memory2.store.memory import MemoryStore
         from dimos.memory2.type.observation import _Unloaded
 
-        bs = FileBlobStore(root=tmp_path / "blobs")
+        bs = FileBlobStore(root=str(tmp_path / "blobs"))
         bs.start()
         with MemoryStore(blob_store=bs) as store:
             s = store.stream("mem_lazy", str)
@@ -475,11 +475,11 @@ class TestStandaloneComponents:
         db = str(tmp_path / "test.db")
 
         with pytest.raises(ValueError, match="either conn or path"):
-            SqliteBlobStore(conn, path=db)
+            SqliteBlobStore(conn=conn, path=db)
         with pytest.raises(ValueError, match="either conn or path"):
-            SqliteVectorStore(conn, path=db)
+            SqliteVectorStore(conn=conn, path=db)
         with pytest.raises(ValueError, match="either conn or path"):
-            SqliteObservationStore(conn, name="x", path=db)
+            SqliteObservationStore(conn=conn, name="x", path=db)
         with pytest.raises(ValueError, match="either conn or path"):
             SqliteBlobStore()
         with pytest.raises(ValueError, match="either conn or path"):

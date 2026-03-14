@@ -14,10 +14,11 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from dimos.memory2.registry import qual
+from dimos.protocol.service.spec import BaseConfig, Configurable
 
 if TYPE_CHECKING:
     from reactivex.abc import DisposableBase
@@ -28,7 +29,11 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-class Notifier(ABC, Generic[T]):
+class NotifierConfig(BaseConfig):
+    pass
+
+
+class Notifier(Configurable[NotifierConfig], Generic[T]):
     """Push-notification for live observation delivery.
 
     Decouples the notification mechanism from storage.  The built-in
@@ -36,6 +41,11 @@ class Notifier(ABC, Generic[T]):
     config).  External implementations (Redis pub/sub, Postgres
     LISTEN/NOTIFY, inotify) can be injected for cross-process use.
     """
+
+    default_config: type[NotifierConfig] = NotifierConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        Configurable.__init__(self, **kwargs)
 
     @abstractmethod
     def subscribe(self, buf: BackpressureBuffer[Observation[T]]) -> DisposableBase:
@@ -49,4 +59,4 @@ class Notifier(ABC, Generic[T]):
         ...
 
     def serialize(self) -> dict[str, Any]:
-        return {"class": qual(type(self)), "config": self._config.model_dump()}
+        return {"class": qual(type(self)), "config": self.config.model_dump()}

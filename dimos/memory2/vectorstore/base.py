@@ -19,12 +19,17 @@ from typing import TYPE_CHECKING, Any
 
 from dimos.core.resource import CompositeResource
 from dimos.memory2.registry import qual
+from dimos.protocol.service.spec import BaseConfig, Configurable
 
 if TYPE_CHECKING:
     from dimos.models.embedding.base import Embedding
 
 
-class VectorStore(CompositeResource):
+class VectorStoreConfig(BaseConfig):
+    pass
+
+
+class VectorStore(Configurable[VectorStoreConfig], CompositeResource):
     """Pluggable storage and ANN index for embedding vectors.
 
     Separates vector indexing from metadata so backends can swap
@@ -34,6 +39,12 @@ class VectorStore(CompositeResource):
     by ``(stream, observation_id)``.  Vector index creation is lazy — the
     first ``put`` for a stream determines dimensionality.
     """
+
+    default_config: type[VectorStoreConfig] = VectorStoreConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        Configurable.__init__(self, **kwargs)
+        CompositeResource.__init__(self)
 
     @abstractmethod
     def put(self, stream_name: str, key: int, embedding: Embedding) -> None:
@@ -51,4 +62,4 @@ class VectorStore(CompositeResource):
         ...
 
     def serialize(self) -> dict[str, Any]:
-        return {"class": qual(type(self)), "config": self._config.model_dump()}
+        return {"class": qual(type(self)), "config": self.config.model_dump()}

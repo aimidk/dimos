@@ -16,21 +16,30 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from pydantic import Field, model_validator
 from reactivex.disposable import Disposable
 
 from dimos.memory2.utils.sqlite import open_sqlite_connection
 from dimos.memory2.utils.validation import validate_identifier
-from dimos.memory2.vectorstore.base import VectorStore
-from dimos.protocol.service.spec import BaseConfig
+from dimos.memory2.vectorstore.base import VectorStore, VectorStoreConfig
 
 if TYPE_CHECKING:
     from dimos.models.embedding.base import Embedding
 
 
-class SqliteVectorStoreConfig(BaseConfig):
+class SqliteVectorStoreConfig(VectorStoreConfig):
+    conn: sqlite3.Connection | None = Field(default=None, exclude=True)
     path: str | None = None
+
+    @model_validator(mode="after")
+    def _conn_xor_path(self) -> SqliteVectorStoreConfig:
+        if self.conn is not None and self.path is not None:
+            raise ValueError("Specify either conn or path, not both")
+        if self.conn is None and self.path is None:
+            raise ValueError("Specify either conn or path")
+        return self
 
 
 class SqliteVectorStore(VectorStore):
@@ -41,19 +50,17 @@ class SqliteVectorStore(VectorStore):
 
     Supports two construction modes:
 
-    - ``SqliteVectorStore(conn)`` — borrows an externally-managed connection.
+    - ``SqliteVectorStore(conn=conn)`` — borrows an externally-managed connection.
     - ``SqliteVectorStore(path="file.db")`` — opens and owns its own connection.
     """
 
-    def __init__(self, conn: sqlite3.Connection | None = None, *, path: str | None = None) -> None:
-        super().__init__()
-        if conn is not None and path is not None:
-            raise ValueError("Specify either conn or path, not both")
-        if conn is None and path is None:
-            raise ValueError("Specify either conn or path")
-        self._config = SqliteVectorStoreConfig(path=path)
-        self._conn: sqlite3.Connection = conn  # type: ignore[assignment]  # set in start() if None
-        self._path = path
+    default_config = SqliteVectorStoreConfig
+    config: SqliteVectorStoreConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._conn: sqlite3.Connection = self.config.conn  # type: ignore[assignment]  # set in start() if None
+        self._path = self.config.path
         self._tables: dict[str, int] = {}  # stream_name -> dimensionality
 
     def _ensure_table(self, stream_name: str, dim: int) -> None:

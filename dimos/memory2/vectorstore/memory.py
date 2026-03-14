@@ -14,12 +14,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from dimos.memory2.vectorstore.base import VectorStore
+from dimos.memory2.vectorstore.base import VectorStore, VectorStoreConfig
 
 if TYPE_CHECKING:
     from dimos.models.embedding.base import Embedding
+
+
+class MemoryVectorStoreConfig(VectorStoreConfig):
+    pass
 
 
 class MemoryVectorStore(VectorStore):
@@ -29,8 +33,10 @@ class MemoryVectorStore(VectorStore):
     Search computes cosine similarity against all vectors in the stream.
     """
 
-    def __init__(self) -> None:
-        super().__init__()
+    default_config: type[MemoryVectorStoreConfig] = MemoryVectorStoreConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
         self._vectors: dict[str, dict[int, Embedding]] = {}
 
     def start(self) -> None:

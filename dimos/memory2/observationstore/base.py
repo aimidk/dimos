@@ -15,9 +15,11 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from dimos.core.resource import CompositeResource
+from dimos.memory2.registry import qual
+from dimos.protocol.service.spec import BaseConfig, Configurable
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -28,12 +30,22 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-class ObservationStore(CompositeResource, Generic[T]):
+class ObservationStoreConfig(BaseConfig):
+    pass
+
+
+class ObservationStore(Configurable[ObservationStoreConfig], CompositeResource, Generic[T]):
     """Core metadata storage and query engine for observations.
 
     Handles only observation metadata storage, query pushdown, and count.
     Blob/vector/live orchestration is handled by the concrete Backend class.
     """
+
+    default_config: type[ObservationStoreConfig] = ObservationStoreConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        Configurable.__init__(self, **kwargs)
+        CompositeResource.__init__(self)
 
     @property
     @abstractmethod
@@ -56,3 +68,6 @@ class ObservationStore(CompositeResource, Generic[T]):
     def fetch_by_ids(self, ids: list[int]) -> list[Observation[T]]:
         """Batch fetch by id (for vector search results)."""
         ...
+
+    def serialize(self) -> dict[str, Any]:
+        return {"class": qual(type(self)), "config": self.config.model_dump()}

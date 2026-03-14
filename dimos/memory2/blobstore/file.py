@@ -15,17 +15,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 
-from dimos.memory2.blobstore.base import BlobStore
+from dimos.memory2.blobstore.base import BlobStore, BlobStoreConfig
 from dimos.memory2.utils.validation import validate_identifier
-from dimos.protocol.service.spec import BaseConfig
-
-if TYPE_CHECKING:
-    import os
 
 
-class FileBlobStoreConfig(BaseConfig):
+class FileBlobStoreConfig(BlobStoreConfig):
     root: str
 
 
@@ -37,10 +33,12 @@ class FileBlobStore(BlobStore):
         {root}/{stream}/{key}.bin
     """
 
-    def __init__(self, root: str | os.PathLike[str]) -> None:
-        super().__init__()
-        self._root = Path(root)
-        self._config = FileBlobStoreConfig(root=str(root))
+    default_config = FileBlobStoreConfig
+    config: FileBlobStoreConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._root = Path(self.config.root)
 
     def _path(self, stream_name: str, key: int) -> Path:
         validate_identifier(stream_name)

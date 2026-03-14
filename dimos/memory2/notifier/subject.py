@@ -17,12 +17,11 @@
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from reactivex.disposable import Disposable
 
-from dimos.memory2.notifier.base import Notifier
-from dimos.protocol.service.spec import BaseConfig
+from dimos.memory2.notifier.base import Notifier, NotifierConfig
 
 if TYPE_CHECKING:
     from reactivex.abc import DisposableBase
@@ -33,7 +32,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-class SubjectNotifierConfig(BaseConfig):
+class SubjectNotifierConfig(NotifierConfig):
     pass
 
 
@@ -44,8 +43,10 @@ class SubjectNotifier(Notifier[T], Generic[T]):
     then iterates outside the lock to avoid deadlocks with slow consumers.
     """
 
-    def __init__(self) -> None:
-        self._config = SubjectNotifierConfig()
+    default_config = SubjectNotifierConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
         self._subscribers: list[BackpressureBuffer[Observation[T]]] = []
         self._lock = threading.Lock()
 

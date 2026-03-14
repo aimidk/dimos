@@ -15,17 +15,27 @@
 from __future__ import annotations
 
 import sqlite3
+from typing import Any
 
+from pydantic import Field, model_validator
 from reactivex.disposable import Disposable
 
-from dimos.memory2.blobstore.base import BlobStore
+from dimos.memory2.blobstore.base import BlobStore, BlobStoreConfig
 from dimos.memory2.utils.sqlite import open_sqlite_connection
 from dimos.memory2.utils.validation import validate_identifier
-from dimos.protocol.service.spec import BaseConfig
 
 
-class SqliteBlobStoreConfig(BaseConfig):
+class SqliteBlobStoreConfig(BlobStoreConfig):
+    conn: sqlite3.Connection | None = Field(default=None, exclude=True)
     path: str | None = None
+
+    @model_validator(mode="after")
+    def _conn_xor_path(self) -> SqliteBlobStoreConfig:
+        if self.conn is not None and self.path is not None:
+            raise ValueError("Specify either conn or path, not both")
+        if self.conn is None and self.path is None:
+            raise ValueError("Specify either conn or path")
+        return self
 
 
 class SqliteBlobStore(BlobStore):
@@ -40,21 +50,19 @@ class SqliteBlobStore(BlobStore):
 
     Supports two construction modes:
 
-    - ``SqliteBlobStore(conn)`` — borrows an externally-managed connection.
+    - ``SqliteBlobStore(conn=conn)`` — borrows an externally-managed connection.
     - ``SqliteBlobStore(path="file.db")`` — opens and owns its own connection.
 
     Does NOT commit; the caller (typically Backend) is responsible for commits.
     """
 
-    def __init__(self, conn: sqlite3.Connection | None = None, *, path: str | None = None) -> None:
-        super().__init__()
-        if conn is not None and path is not None:
-            raise ValueError("Specify either conn or path, not both")
-        if conn is None and path is None:
-            raise ValueError("Specify either conn or path")
-        self._config = SqliteBlobStoreConfig(path=path)
-        self._conn: sqlite3.Connection = conn  # type: ignore[assignment]  # set in start() if None
-        self._path = path
+    default_config = SqliteBlobStoreConfig
+    config: SqliteBlobStoreConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._conn: sqlite3.Connection = self.config.conn  # type: ignore[assignment]  # set in start() if None
+        self._path = self.config.path
         self._tables: set[str] = set()
 
     def _ensure_table(self, stream_name: str) -> None:

@@ -39,7 +39,7 @@ def _emb(vec: list[float]) -> Embedding:
 
 @pytest.fixture
 def bs(tmp_path: Path) -> Generator[FileBlobStore, None, None]:
-    blob_store = FileBlobStore(tmp_path / "blobs")
+    blob_store = FileBlobStore(root=str(tmp_path / "blobs"))
     blob_store.start()
     yield blob_store
     blob_store.stop()

@@ -19,14 +19,25 @@ from typing import Any
 
 from dimos.core.resource import CompositeResource
 from dimos.memory2.registry import qual
+from dimos.protocol.service.spec import BaseConfig, Configurable
 
 
-class BlobStore(CompositeResource):
+class BlobStoreConfig(BaseConfig):
+    pass
+
+
+class BlobStore(Configurable[BlobStoreConfig], CompositeResource):
     """Persistent storage for encoded payload blobs.
 
     Separates payload data from metadata indexing so that large blobs
     (images, point clouds) don't penalize metadata queries.
     """
+
+    default_config: type[BlobStoreConfig] = BlobStoreConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        Configurable.__init__(self, **kwargs)
+        CompositeResource.__init__(self)
 
     @abstractmethod
     def put(self, stream_name: str, key: int, data: bytes) -> None:
@@ -44,4 +55,4 @@ class BlobStore(CompositeResource):
         ...
 
     def serialize(self) -> dict[str, Any]:
-        return {"class": qual(type(self)), "config": self._config.model_dump()}
+        return {"class": qual(type(self)), "config": self.config.model_dump()}
