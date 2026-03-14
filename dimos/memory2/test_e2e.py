@@ -152,6 +152,10 @@ class TestE2EQuery:
 
         assert "color_image" in streams
         assert "lidar" in streams
+        assert session.streams.color_image
+        assert session.streams.lidar
+
+        print(session.streams.lidar)
 
     def test_video_count(self, session: SqliteStore) -> None:
         video = session.stream("color_image", Image)
