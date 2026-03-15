@@ -112,6 +112,9 @@ class NativeModuleConfig(ModuleConfig):
 
 _NativeConfig = TypeVar("_NativeConfig", bound=NativeModuleConfig, default=NativeModuleConfig)
 
+# How many recent stderr/stdout lines to keep for crash diagnostics.
+_TAIL_LINES = 50
+
 
 class NativeModule(Module[_NativeConfig]):
     """Module that wraps a native executable as a managed subprocess.
@@ -131,15 +134,31 @@ class NativeModule(Module[_NativeConfig]):
     _process: subprocess.Popen[bytes] | None = None
     _watchdog: threading.Thread | None = None
     _stopping: bool = False
+    _stderr_tail: list[str]
+    _stdout_tail: list[str]
+    _tail_lock: threading.Lock
+
+    @property
+    def _mod_label(self) -> str:
+        """Short human-readable label: ClassName(executable_basename)."""
+        exe = Path(self.config.executable).name if self.config.executable else "?"
+        return f"{type(self).__name__}({exe})"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        self._stderr_tail = []
+        self._stdout_tail = []
+        self._tail_lock = threading.Lock()
         self._resolve_paths()
 
     @rpc
     def start(self) -> None:
         if self._process is not None and self._process.poll() is None:
-            logger.warning("Native process already running", pid=self._process.pid)
+            logger.warning(
+                "Native process already running",
+                module=self._mod_label,
+                pid=self._process.pid,
+            )
             return
 
         self._maybe_build()
@@ -155,7 +174,17 @@ class NativeModule(Module[_NativeConfig]):
         env = {**os.environ, **self.config.extra_env}
         cwd = self.config.cwd or str(Path(self.config.executable).resolve().parent)
 
-        logger.info("Starting native process", cmd=" ".join(cmd), cwd=cwd)
+        # Reset tail buffers for this run.
+        with self._tail_lock:
+            self._stderr_tail.clear()
+            self._stdout_tail.clear()
+
+        logger.info(
+            "Starting native process",
+            module=self._mod_label,
+            cmd=" ".join(cmd),
+            cwd=cwd,
+        )
         self._process = subprocess.Popen(
             cmd,
             env=env,
@@ -163,23 +192,37 @@ class NativeModule(Module[_NativeConfig]):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        logger.info("Native process started", pid=self._process.pid)
+        logger.info(
+            "Native process started",
+            module=self._mod_label,
+            pid=self._process.pid,
+        )
 
         self._stopping = False
-        self._watchdog = threading.Thread(target=self._watch_process, daemon=True)
+        self._watchdog = threading.Thread(
+            target=self._watch_process,
+            daemon=True,
+            name=f"native-watchdog-{self._mod_label}",
+        )
         self._watchdog.start()
 
     @rpc
     def stop(self) -> None:
         self._stopping = True
         if self._process is not None and self._process.poll() is None:
-            logger.info("Stopping native process", pid=self._process.pid)
+            logger.info(
+                "Stopping native process",
+                module=self._mod_label,
+                pid=self._process.pid,
+            )
             self._process.send_signal(signal.SIGTERM)
             try:
                 self._process.wait(timeout=self.config.shutdown_timeout)
             except subprocess.TimeoutExpired:
                 logger.warning(
-                    "Native process did not exit, sending SIGKILL", pid=self._process.pid
+                    "Native process did not exit, sending SIGKILL",
+                    module=self._mod_label,
+                    pid=self._process.pid,
                 )
                 self._process.kill()
                 self._process.wait(timeout=5)
@@ -194,28 +237,85 @@ class NativeModule(Module[_NativeConfig]):
         if self._process is None:
             return
 
-        stdout_t = self._start_reader(self._process.stdout, "info")
-        stderr_t = self._start_reader(self._process.stderr, "warning")
+        stdout_t = self._start_reader(self._process.stdout, "info", self._stdout_tail)
+        stderr_t = self._start_reader(self._process.stderr, "warning", self._stderr_tail)
         rc = self._process.wait()
         stdout_t.join(timeout=2)
         stderr_t.join(timeout=2)
 
         if self._stopping:
+            logger.info(
+                "Native process exited (expected)",
+                module=self._mod_label,
+                pid=self._process.pid,
+                returncode=rc,
+            )
             return
+
+        # Grab the tail for diagnostics.
+        with self._tail_lock:
+            stderr_snapshot = list(self._stderr_tail)
+            stdout_snapshot = list(self._stdout_tail)
+
         logger.error(
             "Native process died unexpectedly",
+            module=self._mod_label,
             pid=self._process.pid,
             returncode=rc,
         )
+
+        # Log the last stderr/stdout lines so the cause is visible.
+        if stderr_snapshot:
+            logger.error(
+                f"Last {len(stderr_snapshot)} stderr lines from {self._mod_label}:",
+                module=self._mod_label,
+                pid=self._process.pid,
+            )
+            for line in stderr_snapshot:
+                logger.error(f"  stderr| {line}", module=self._mod_label)
+
+        if stdout_snapshot and not stderr_snapshot:
+            # Only dump stdout if stderr was empty (avoid double-noise).
+            logger.error(
+                f"Last {len(stdout_snapshot)} stdout lines from {self._mod_label}:",
+                module=self._mod_label,
+                pid=self._process.pid,
+            )
+            for line in stdout_snapshot:
+                logger.error(f"  stdout| {line}", module=self._mod_label)
+
+        if not stderr_snapshot and not stdout_snapshot:
+            logger.error(
+                "No output captured from native process — "
+                "binary may have crashed before producing any output",
+                module=self._mod_label,
+                pid=self._process.pid,
+            )
+
         self.stop()
 
-    def _start_reader(self, stream: IO[bytes] | None, level: str) -> threading.Thread:
+    def _start_reader(
+        self,
+        stream: IO[bytes] | None,
+        level: str,
+        tail_buf: list[str],
+    ) -> threading.Thread:
         """Spawn a daemon thread that pipes a subprocess stream through the logger."""
-        t = threading.Thread(target=self._read_log_stream, args=(stream, level), daemon=True)
+        t = threading.Thread(
+            target=self._read_log_stream,
+            args=(stream, level, tail_buf),
+            daemon=True,
+            name=f"native-reader-{level}-{self._mod_label}",
+        )
         t.start()
         return t
 
-    def _read_log_stream(self, stream: IO[bytes] | None, level: str) -> None:
+    def _read_log_stream(
+        self,
+        stream: IO[bytes] | None,
+        level: str,
+        tail_buf: list[str],
+    ) -> None:
         if stream is None:
             return
         log_fn = getattr(logger, level)
@@ -223,15 +323,26 @@ class NativeModule(Module[_NativeConfig]):
             line = raw.decode("utf-8", errors="replace").rstrip()
             if not line:
                 continue
+
+            # Keep a rolling tail buffer for crash diagnostics.
+            with self._tail_lock:
+                tail_buf.append(line)
+                if len(tail_buf) > _TAIL_LINES:
+                    tail_buf.pop(0)
+
             if self.config.log_format == LogFormat.JSON:
                 try:
                     data = json.loads(line)
                     event = data.pop("event", line)
-                    log_fn(event, **data)
+                    log_fn(event, module=self._mod_label, **data)
                     continue
                 except (json.JSONDecodeError, TypeError):
-                    logger.warning("malformed JSON from native module", raw=line)
-            log_fn(line, pid=self._process.pid if self._process else None)
+                    logger.warning(
+                        "malformed JSON from native module",
+                        module=self._mod_label,
+                        raw=line,
+                    )
+            log_fn(line, module=self._mod_label, pid=self._process.pid if self._process else None)
         stream.close()
 
     def _resolve_paths(self) -> None:
@@ -247,14 +358,20 @@ class NativeModule(Module[_NativeConfig]):
         """Run ``build_command`` if the executable does not exist."""
         exe = Path(self.config.executable)
         if exe.exists():
+            logger.info(
+                "Executable found, skipping build",
+                module=self._mod_label,
+                executable=str(exe),
+            )
             return
         if self.config.build_command is None:
             raise FileNotFoundError(
-                f"Executable not found: {exe}. "
+                f"[{self._mod_label}] Executable not found: {exe}. "
                 "Set build_command in config to auto-build, or build it manually."
             )
         logger.info(
             "Executable not found, running build",
+            module=self._mod_label,
             executable=str(exe),
             build_command=self.config.build_command,
         )
@@ -267,19 +384,29 @@ class NativeModule(Module[_NativeConfig]):
             stderr=subprocess.PIPE,
         )
         stdout, stderr = proc.communicate()
-        for line in stdout.decode("utf-8", errors="replace").splitlines():
+
+        stdout_lines = stdout.decode("utf-8", errors="replace").splitlines()
+        stderr_lines = stderr.decode("utf-8", errors="replace").splitlines()
+
+        for line in stdout_lines:
             if line.strip():
-                logger.info(line)
-        for line in stderr.decode("utf-8", errors="replace").splitlines():
+                logger.info(line, module=self._mod_label)
+        for line in stderr_lines:
             if line.strip():
-                logger.warning(line)
+                logger.warning(line, module=self._mod_label)
+
         if proc.returncode != 0:
+            # Include the last stderr lines in the exception for RPC callers.
+            tail = [l for l in stderr_lines if l.strip()][-20:]
+            tail_str = "\n".join(tail) if tail else "(no stderr output)"
             raise RuntimeError(
-                f"Build command failed (exit {proc.returncode}): {self.config.build_command}"
+                f"[{self._mod_label}] Build command failed "
+                f"(exit {proc.returncode}): {self.config.build_command}\n"
+                f"--- last stderr ---\n{tail_str}"
             )
         if not exe.exists():
             raise FileNotFoundError(
-                f"Build command succeeded but executable still not found: {exe}"
+                f"[{self._mod_label}] Build command succeeded but executable still not found: {exe}"
             )
 
     def _collect_topics(self) -> dict[str, str]:
