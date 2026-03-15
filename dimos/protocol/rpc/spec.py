@@ -39,16 +39,10 @@ DEFAULT_RPC_TIMEOUTS: MappingProxyType[str, float] = MappingProxyType({"start": 
 
 class RPCClient(Protocol):
     # call_sync resolves per-method overrides from rpc_timeouts,
-    # falling back to default_rpc_timeout.
+    # falling back to default_rpc_timeout. These are set by
+    # PubSubRPCMixin.__init__ at runtime.
     rpc_timeouts: dict[str, float]
     default_rpc_timeout: float
-
-    def __init__(
-        self, *args: Any, rpc_timeouts: dict[str, float], default_rpc_timeout: float, **kwargs: Any
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self.rpc_timeouts = dict(rpc_timeouts)
-        self.default_rpc_timeout = default_rpc_timeout
 
     # if we don't provide callback, we don't get a return unsub f
     @overload
@@ -126,9 +120,4 @@ class RPCServer(Protocol):
 
 
 class RPCSpec(RPCServer, RPCClient):
-    def __init__(
-        self, *args: Any, rpc_timeouts: dict[str, float], default_rpc_timeout: float, **kwargs: Any
-    ) -> None:
-        super().__init__(
-            *args, rpc_timeouts=rpc_timeouts, default_rpc_timeout=default_rpc_timeout, **kwargs
-        )
+    pass

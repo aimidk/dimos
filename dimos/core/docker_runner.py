@@ -183,6 +183,9 @@ class DockerModule(ModuleProxyProtocol):
             image_exists,
         )
 
+        # global_config is passed by deploy pipeline but isn't a config field
+        kwargs.pop("global_config", None)
+
         config_class = getattr(module_class, "default_config", DockerModuleConfig)
         if not issubclass(config_class, DockerModuleConfig):
             raise TypeError(
@@ -531,6 +534,7 @@ class DockerModule(ModuleProxyProtocol):
                 self.rpc.call_sync(
                     f"{self.remote_name}/get_rpc_method_names",
                     ([], {}),
+                    rpc_timeout=3.0,  # short timeout for polling readiness
                 )
                 elapsed = time.time() - start_time
                 logger.info(f"{self.remote_name} ready ({elapsed:.1f}s)")

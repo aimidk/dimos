@@ -65,9 +65,9 @@ class PubSubRPCMixin(RPCSpec, PubSub[TopicT, MsgT], Generic[TopicT, MsgT]):
     def __init__(
         self, *args: Any, rpc_timeouts: dict[str, float], default_rpc_timeout: float, **kwargs: Any
     ) -> None:
-        super().__init__(
-            *args, rpc_timeouts=rpc_timeouts, default_rpc_timeout=default_rpc_timeout, **kwargs
-        )
+        super().__init__(*args, **kwargs)
+        self.rpc_timeouts = dict(rpc_timeouts)
+        self.default_rpc_timeout = default_rpc_timeout
         # Thread pool for RPC handler execution (prevents deadlock in nested calls)
         self._call_thread_pool: ThreadPoolExecutor | None = None
         self._call_thread_pool_lock = threading.RLock()

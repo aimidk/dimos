@@ -31,7 +31,7 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import field
 from pathlib import Path
 import subprocess
 import time
@@ -45,7 +45,6 @@ from dimos.core.module import Module
 from dimos.core.stream import In, Out
 
 
-@dataclass(kw_only=True)
 class HelloDockerConfig(DockerModuleConfig):
     docker_image: str = "dimos-hello-docker:latest"
     docker_file: Path | None = Path(__file__).parent / "Dockerfile"
