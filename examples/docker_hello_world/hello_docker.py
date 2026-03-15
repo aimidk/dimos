@@ -73,7 +73,7 @@ class HelloDockerModule(Module["HelloDockerConfig"]):
 
     def _cowsay(self, text: str) -> str:
         """Run cowsay inside the container and return the ASCII art."""
-        return subprocess.check_output(["/usr/games/cowsay", text], text=True)
+        return subprocess.check_output(["cowsay", text], text=True)
 
     def _on_prompt(self, text: str) -> None:
         art = self._cowsay(text)
