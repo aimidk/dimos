@@ -36,8 +36,9 @@ from typing import TYPE_CHECKING, Annotated
 from pydantic.experimental.pipeline import validate_as
 
 from dimos.core.native_module import NativeModule, NativeModuleConfig
-from dimos.core.stream import Out
+from dimos.core.stream import In, Out
 from dimos.msgs.nav_msgs.Odometry import Odometry
+from dimos.msgs.sensor_msgs.Image import Image
 from dimos.spec import perception
 
 _CONFIG_DIR = Path(__file__).parent / "config"
@@ -63,7 +64,7 @@ class OrbSlam3Config(NativeModuleConfig):
     # Camera settings YAML (relative to config/ dir, or absolute path)
     settings: Annotated[
         Path, validate_as(...).transform(lambda p: p if p.is_absolute() else _CONFIG_DIR / p)
-    ] = Path("RealSense_D435i.yaml")
+    ] = Path("RealSense_D435i.yaml.opencv")
 
     # Resolved from settings, passed as --settings_path to the binary
     settings_path: str | None = None
@@ -76,6 +77,9 @@ class OrbSlam3Config(NativeModuleConfig):
 
     def model_post_init(self, __context: object) -> None:
         super().model_post_init(__context)
+        # Resolve relative settings path against config/ dir
+        if not self.settings.is_absolute():
+            self.settings = _CONFIG_DIR / self.settings
         if self.settings_path is None:
             self.settings_path = str(self.settings)
 
@@ -84,10 +88,12 @@ class OrbSlam3(NativeModule[OrbSlam3Config], perception.Odometry):
     """ORB-SLAM3 visual SLAM module.
 
     Ports:
+        color_image (In[Image]): Camera frames to track.
         odometry (Out[Odometry]): Camera pose as nav_msgs.Odometry.
     """
 
     default_config = OrbSlam3Config
+    color_image: In[Image]
     odometry: Out[Odometry]
 
 

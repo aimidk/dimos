@@ -66,8 +66,13 @@ target_link_libraries(orbslam3_native PRIVATE
   ${ORBSLAM3_DIR}/lib/libg2o.so
   ${OpenCV_LIBS}
   ${Pangolin_LIBRARIES}
+  ${LCM_LIBRARIES}
   -lboost_serialization
   -lcrypto
+)
+
+target_link_directories(orbslam3_native PRIVATE
+  ${LCM_LIBRARY_DIRS}
 )
 
 install(TARGETS orbslam3_native DESTINATION bin)
