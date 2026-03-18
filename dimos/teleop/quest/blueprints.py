@@ -28,7 +28,7 @@ from dimos.teleop.quest.quest_types import Buttons
 from dimos.visualization.rerun.bridge import rerun_bridge
 
 # Arm teleop with press-and-hold engage (has rerun viz)
-arm_teleop_rerun = autoconnect(
+teleop_quest_rerun = autoconnect(
     arm_teleop_module(),
     rerun_bridge(),
 ).transports(
@@ -43,7 +43,7 @@ arm_teleop_rerun = autoconnect(
 # Single XArm7 teleop: right controller -> xarm7
 # Usage: dimos run arm-teleop-xarm7
 
-arm_teleop_xarm7 = autoconnect(
+teleop_quest_xarm7 = autoconnect(
     arm_teleop_module(task_names={"right": "teleop_xarm"}),
     coordinator_teleop_xarm7,
 ).transports(
@@ -58,7 +58,7 @@ arm_teleop_xarm7 = autoconnect(
 
 # Single Piper teleop: left controller -> piper arm
 # Usage: dimos run arm-teleop-piper
-arm_teleop_piper = autoconnect(
+teleop_quest_piper = autoconnect(
     arm_teleop_module(task_names={"left": "teleop_piper"}),
     coordinator_teleop_piper,
 ).transports(
@@ -72,7 +72,7 @@ arm_teleop_piper = autoconnect(
 
 
 # Dual arm teleop: right -> piper, left -> xarm6 (TeleopIK)
-arm_teleop_dual = autoconnect(
+teleop_quest_dual = autoconnect(
     arm_teleop_module(task_names={"right": "teleop_piper", "left": "teleop_xarm"}),
     coordinator_teleop_dual,
 ).transports(
@@ -89,8 +89,8 @@ arm_teleop_dual = autoconnect(
 
 
 __all__ = [
-    "arm_teleop_dual",
-    "arm_teleop_piper",
-    "arm_teleop_rerun",
-    "arm_teleop_xarm7",
+    "teleop_quest_dual",
+    "teleop_quest_piper",
+    "teleop_quest_rerun",
+    "teleop_quest_xarm7",
 ]

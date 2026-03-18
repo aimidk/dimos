@@ -16,10 +16,6 @@
 # Run `pytest dimos/robot/test_all_blueprints_generation.py` to regenerate.
 
 all_blueprints = {
-    "arm-teleop-dual": "dimos.teleop.quest.blueprints:arm_teleop_dual",
-    "arm-teleop-piper": "dimos.teleop.quest.blueprints:arm_teleop_piper",
-    "arm-teleop-rerun": "dimos.teleop.quest.blueprints:arm_teleop_rerun",
-    "arm-teleop-xarm7": "dimos.teleop.quest.blueprints:arm_teleop_xarm7",
     "coordinator-basic": "dimos.control.blueprints:coordinator_basic",
     "coordinator-cartesian-ik-mock": "dimos.control.blueprints:coordinator_cartesian_ik_mock",
     "coordinator-cartesian-ik-piper": "dimos.control.blueprints:coordinator_cartesian_ik_piper",
@@ -59,9 +55,13 @@ all_blueprints = {
     "mid360-fastlio": "dimos.hardware.sensors.lidar.fastlio2.fastlio_blueprints:mid360_fastlio",
     "mid360-fastlio-voxels": "dimos.hardware.sensors.lidar.fastlio2.fastlio_blueprints:mid360_fastlio_voxels",
     "mid360-fastlio-voxels-native": "dimos.hardware.sensors.lidar.fastlio2.fastlio_blueprints:mid360_fastlio_voxels_native",
-    "phone-go2-fleet-teleop": "dimos.teleop.phone.blueprints:phone_go2_fleet_teleop",
-    "phone-go2-teleop": "dimos.teleop.phone.blueprints:phone_go2_teleop",
-    "simple-phone-teleop": "dimos.teleop.phone.blueprints:simple_phone_teleop",
+    "teleop-phone": "dimos.teleop.phone.blueprints:teleop_phone",
+    "teleop-phone-go2": "dimos.teleop.phone.blueprints:teleop_phone_go2",
+    "teleop-phone-go2-fleet": "dimos.teleop.phone.blueprints:teleop_phone_go2_fleet",
+    "teleop-quest-dual": "dimos.teleop.quest.blueprints:teleop_quest_dual",
+    "teleop-quest-piper": "dimos.teleop.quest.blueprints:teleop_quest_piper",
+    "teleop-quest-rerun": "dimos.teleop.quest.blueprints:teleop_quest_rerun",
+    "teleop-quest-xarm7": "dimos.teleop.quest.blueprints:teleop_quest_xarm7",
     "uintree-g1-primitive-no-nav": "dimos.robot.unitree.g1.blueprints.primitive.uintree_g1_primitive_no_nav:uintree_g1_primitive_no_nav",
     "unitree-g1": "dimos.robot.unitree.g1.blueprints.perceptive.unitree_g1:unitree_g1",
     "unitree-g1-agentic": "dimos.robot.unitree.g1.blueprints.agentic.unitree_g1_agentic:unitree_g1_agentic",
