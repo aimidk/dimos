@@ -87,19 +87,19 @@ class TestModuleCoordinatorDockerRouting:
 
         coordinator = ModuleCoordinator()
         coordinator.start()
+        try:
+            result = coordinator.deploy(FakeDockerModule)
 
-        result = coordinator.deploy(FakeDockerModule)
-
-        # Should NOT go through worker manager
-        mock_worker_mgr.deploy.assert_not_called()
-        # Should construct a DockerModule (container launch happens inside __init__)
-        mock_docker_module_cls.assert_called_once_with(FakeDockerModule, g=global_config)
-        # start() is NOT called during deploy — it's called in start_all_modules
-        mock_dm.start.assert_not_called()
-        assert result is mock_dm
-        assert coordinator.get_instance(FakeDockerModule) is mock_dm
-
-        coordinator.stop()
+            # Should NOT go through worker manager
+            mock_worker_mgr.deploy.assert_not_called()
+            # Should construct a DockerModule (container launch happens inside __init__)
+            mock_docker_module_cls.assert_called_once_with(FakeDockerModule, g=global_config)
+            # start() is NOT called during deploy — it's called in start_all_modules
+            mock_dm.start.assert_not_called()
+            assert result is mock_dm
+            assert coordinator.get_instance(FakeDockerModule) is mock_dm
+        finally:
+            coordinator.stop()
 
     @patch("dimos.core.docker_runner.DockerModule")
     @patch("dimos.core.module_coordinator.WorkerManager")
@@ -114,11 +114,11 @@ class TestModuleCoordinatorDockerRouting:
 
         coordinator = ModuleCoordinator()
         coordinator.start()
-
-        with pytest.raises(RuntimeError, match="launch failed"):
-            coordinator.deploy(FakeDockerModule)
-
-        coordinator.stop()
+        try:
+            with pytest.raises(RuntimeError, match="launch failed"):
+                coordinator.deploy(FakeDockerModule)
+        finally:
+            coordinator.stop()
 
     @patch("dimos.core.module_coordinator.WorkerManager")
     def test_deploy_routes_regular_module_to_worker_manager(self, mock_worker_manager_cls):
@@ -129,13 +129,13 @@ class TestModuleCoordinatorDockerRouting:
 
         coordinator = ModuleCoordinator()
         coordinator.start()
+        try:
+            result = coordinator.deploy(FakeRegularModule)
 
-        result = coordinator.deploy(FakeRegularModule)
-
-        mock_worker_mgr.deploy.assert_called_once_with(FakeRegularModule, global_config, {})
-        assert result is mock_proxy
-
-        coordinator.stop()
+            mock_worker_mgr.deploy.assert_called_once_with(FakeRegularModule, global_config, {})
+            assert result is mock_proxy
+        finally:
+            coordinator.stop()
 
     @patch("dimos.core.docker_worker_manager.DockerWorkerManager.deploy_parallel")
     @patch("dimos.core.module_coordinator.WorkerManager")
@@ -153,25 +153,25 @@ class TestModuleCoordinatorDockerRouting:
 
         coordinator = ModuleCoordinator()
         coordinator.start()
+        try:
+            specs = [
+                (FakeRegularModule, (), {}),
+                (FakeDockerModule, (), {}),
+            ]
+            results = coordinator.deploy_parallel(specs)
 
-        specs = [
-            (FakeRegularModule, (), {}),
-            (FakeDockerModule, (), {}),
-        ]
-        results = coordinator.deploy_parallel(specs)
+            # Regular module goes through worker manager
+            mock_worker_mgr.deploy_parallel.assert_called_once_with([(FakeRegularModule, (), {})])
+            # Docker specs go through DockerWorkerManager
+            mock_docker_deploy.assert_called_once_with([(FakeDockerModule, (), {})])
+            # start() is NOT called during deploy — it's called in start_all_modules
+            mock_dm.start.assert_not_called()
 
-        # Regular module goes through worker manager
-        mock_worker_mgr.deploy_parallel.assert_called_once_with([(FakeRegularModule, (), {})])
-        # Docker specs go through DockerWorkerManager
-        mock_docker_deploy.assert_called_once_with([(FakeDockerModule, (), {})])
-        # start() is NOT called during deploy — it's called in start_all_modules
-        mock_dm.start.assert_not_called()
-
-        # Results preserve input order
-        assert results[0] is regular_proxy
-        assert results[1] is mock_dm
-
-        coordinator.stop()
+            # Results preserve input order
+            assert results[0] is regular_proxy
+            assert results[1] is mock_dm
+        finally:
+            coordinator.stop()
 
     @patch("dimos.core.docker_runner.DockerModule")
     @patch("dimos.core.module_coordinator.WorkerManager")
@@ -184,8 +184,10 @@ class TestModuleCoordinatorDockerRouting:
 
         coordinator = ModuleCoordinator()
         coordinator.start()
-        coordinator.deploy(FakeDockerModule)
-        coordinator.stop()
+        try:
+            coordinator.deploy(FakeDockerModule)
+        finally:
+            coordinator.stop()
 
         # stop() called exactly once (no double cleanup)
         assert mock_dm.stop.call_count == 1
