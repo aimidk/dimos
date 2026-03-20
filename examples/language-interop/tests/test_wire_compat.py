@@ -1,3 +1,17 @@
+# Copyright 2026 Dimensional Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Wire-format compatibility tests.
 
 Validates that Python LCM encoding matches known binary layouts from the Rust
@@ -34,8 +48,7 @@ def test_twist_fingerprint() -> None:
     encoded = t.lcm_encode()
     fingerprint = struct.unpack(">Q", encoded[:8])[0]
     assert fingerprint == TWIST_FINGERPRINT, (
-        f"Twist fingerprint mismatch: got 0x{fingerprint:016X}, "
-        f"expected 0x{TWIST_FINGERPRINT:016X}"
+        f"Twist fingerprint mismatch: got 0x{fingerprint:016X}, expected 0x{TWIST_FINGERPRINT:016X}"
     )
 
 
