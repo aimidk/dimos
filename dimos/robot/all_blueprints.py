@@ -167,6 +167,7 @@ all_modules = {
     "twist-teleop-module": "dimos.teleop.quest.quest_extensions",
     "unitree-g1-skill-container": "dimos.robot.unitree.g1.skill_container",
     "unitree-skill-container": "dimos.robot.unitree.unitree_skill_container",
+    "unity-bridge-module": "dimos.simulation.unity.module",
     "vlm-agent": "dimos.agents.vlm_agent",
     "vlm-stream-tester": "dimos.agents.vlm_stream_tester",
     "voxel-grid-mapper": "dimos.mapping.voxels",
