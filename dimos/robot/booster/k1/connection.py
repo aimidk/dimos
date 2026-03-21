@@ -179,8 +179,8 @@ class K1Connection(Module[ConnectionConfig], Camera, Pointcloud):
                         if start >= 0 and end >= 0:
                             frame = data[start : end + 2]
                             self._on_frame(frame)
-            except TimeoutError:
-                logger.warning("Video timeout (%s), retrying in 3s...", uri)
+            except TimeoutError as e:
+                logger.warning("Video timeout: %s: %s, retrying in 3s...", type(e).__name__, e)
                 await asyncio.sleep(3)
             except Exception as e:
                 if self._stop_event.is_set():
@@ -221,7 +221,7 @@ class K1Connection(Module[ConnectionConfig], Camera, Pointcloud):
                     self._conn.call(RpcApiId.ROBOT_MOVE, bytes(stop))
             return True
         except Exception as e:
-            logger.debug("Move command failed: %s", e)
+            logger.warning("Move command failed: %s: %s", type(e).__name__, e)
             return False
 
     @rpc
