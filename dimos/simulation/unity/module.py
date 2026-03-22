@@ -73,8 +73,6 @@ PI = math.pi
 
 # LFS data asset name for the Unity sim binary
 _LFS_ASSET = "unity_sim_x86"
-_SUPPORTED_SYSTEMS = {"Linux"}
-_SUPPORTED_ARCHS = {"x86_64", "AMD64"}
 
 # Read timeout for the Unity TCP connection (seconds).  If Unity stops
 # sending data for longer than this the bridge treats it as a hung
@@ -128,17 +126,20 @@ def _write_tcp_command(sock: socket.socket, command: str, params: dict[str, Any]
 
 def _validate_platform() -> None:
     """Raise if the current platform can't run the Unity x86_64 binary."""
+    supported_systems = {"Linux"}
+    supported_archs = {"x86_64", "AMD64"}
+
     system = platform.system()
     arch = platform.machine()
 
-    if system not in _SUPPORTED_SYSTEMS:
+    if system not in supported_systems:
         raise RuntimeError(
             f"Unity simulator requires Linux x86_64 but running on {system} {arch}. "
             f"macOS and Windows are not supported (the binary is a Linux ELF executable). "
             f"Use a Linux VM, Docker, or WSL2."
         )
 
-    if arch not in _SUPPORTED_ARCHS:
+    if arch not in supported_archs:
         raise RuntimeError(
             f"Unity simulator requires x86_64 but running on {arch}. "
             f"ARM64 Linux is not supported. Use an x86_64 machine or emulation layer."
@@ -253,7 +254,7 @@ class UnityBridgeModule(Module[UnityBridgeConfig]):
         """Suppress CameraInfo logging — the static pinhole handles 3D projection."""
         return None
 
-    def __init__(self, **kwargs) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._x = self.config.init_x
         self._y = self.config.init_y

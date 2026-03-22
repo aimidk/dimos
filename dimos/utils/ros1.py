@@ -36,13 +36,14 @@ Supported types:
 from __future__ import annotations
 
 from dataclasses import dataclass
-import logging
 import struct
 import time
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
+from dimos.utils.logging_config import setup_logger
+
+logger = setup_logger()
 
 # Low-level readers
 
@@ -258,7 +259,7 @@ def deserialize_pointcloud2(data: bytes) -> tuple[np.ndarray, str, float] | None
 
         return points, header.frame_id, header.stamp
     except Exception:
-        logger.debug("Failed to deserialize PointCloud2", exc_info=True)
+        logger.exception("Failed to deserialize PointCloud2")
         return None
 
 
@@ -279,7 +280,7 @@ def deserialize_compressed_image(data: bytes) -> tuple[bytes, str, str, float] |
         img_data = r.raw(img_len)
         return img_data, fmt, header.frame_id, header.stamp
     except Exception:
-        logger.debug("Failed to deserialize CompressedImage", exc_info=True)
+        logger.exception("Failed to deserialize CompressedImage")
         return None
 
 

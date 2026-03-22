@@ -40,10 +40,7 @@ Example usage::
 
 from __future__ import annotations
 
-<<<<<<< HEAD
 import collections
-=======
->>>>>>> origin/dev
 import enum
 import inspect
 import json
@@ -139,10 +136,7 @@ class NativeModule(Module[_NativeConfig]):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-<<<<<<< HEAD
         self._last_stderr_lines = collections.deque(maxlen=50)
-=======
->>>>>>> origin/dev
         self._resolve_paths()
 
     @rpc
