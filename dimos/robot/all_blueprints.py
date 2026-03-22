@@ -84,6 +84,7 @@ all_blueprints = {
     "unitree-go2-coordinator": "dimos.robot.unitree.go2.blueprints.basic.unitree_go2_coordinator:unitree_go2_coordinator",
     "unitree-go2-detection": "dimos.robot.unitree.go2.blueprints.smart.unitree_go2_detection:unitree_go2_detection",
     "unitree-go2-fleet": "dimos.robot.unitree.go2.blueprints.basic.unitree_go2_fleet:unitree_go2_fleet",
+    "unitree-go2-incremental-map": "dimos.robot.unitree.go2.blueprints.nav2.unitree_go2_incremental_map:unitree_go2_incremental_map",
     "unitree-go2-ros": "dimos.robot.unitree.go2.blueprints.smart.unitree_go2_ros:unitree_go2_ros",
     "unitree-go2-smartnav": "dimos.robot.unitree.go2.blueprints.smart.unitree_go2_smartnav:unitree_go2_smartnav",
     "unitree-go2-spatial": "dimos.robot.unitree.go2.blueprints.smart.unitree_go2_spatial:unitree_go2_spatial",
