@@ -13,16 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""G1 nav sim with FAR planner — global route planning + local obstacle avoidance.
+"""G1 basic nav sim — reactive local planner only (no global route planning).
 
-Uses the FAR visibility-graph planner to find global routes around obstacles,
-with the local planner handling reactive avoidance along the route. Clicks
-set a goal for the FAR planner, which emits intermediate waypoints that guide
-the local planner through the environment.
-
-Data flow:
-    Click → ClickToGoal → goal → FarPlanner → way_point → LocalPlanner → path
-    → PathFollower → nav_cmd_vel → CmdVelMux → cmd_vel → UnityBridgeModule
+Click-to-navigate sends waypoints directly to the local planner, which
+reactively avoids obstacles. Good for short-range navigation but can get
+stuck in dead ends. For global route planning, use unitree-g1-nav-sim.
 """
 
 from __future__ import annotations
@@ -30,7 +25,6 @@ from __future__ import annotations
 from typing import Any
 
 from dimos.core.blueprints import autoconnect
-from dimos.core.global_config import global_config
 from dimos.navigation.smartnav.blueprints._rerun_helpers import (
     goal_path_override,
     path_override,
@@ -43,7 +37,6 @@ from dimos.navigation.smartnav.blueprints._rerun_helpers import (
 )
 from dimos.navigation.smartnav.modules.click_to_goal.click_to_goal import ClickToGoal
 from dimos.navigation.smartnav.modules.cmd_vel_mux import CmdVelMux
-from dimos.navigation.smartnav.modules.far_planner.far_planner import FarPlanner
 from dimos.navigation.smartnav.modules.local_planner.local_planner import LocalPlanner
 from dimos.navigation.smartnav.modules.path_follower.path_follower import PathFollower
 from dimos.navigation.smartnav.modules.sensor_scan_generation.sensor_scan_generation import (
@@ -52,6 +45,7 @@ from dimos.navigation.smartnav.modules.sensor_scan_generation.sensor_scan_genera
 from dimos.navigation.smartnav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
 from dimos.navigation.smartnav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
 from dimos.navigation.smartnav.modules.unity_bridge.unity_bridge import UnityBridgeModule
+from dimos.core.global_config import global_config
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
 from dimos.visualization.vis_module import vis_module
 
@@ -91,7 +85,7 @@ _vis = vis_module(
     },
 )
 
-unitree_g1_nav_sim = autoconnect(
+unitree_g1_nav_basic_sim = autoconnect(
     UnityBridgeModule.blueprint(
         unity_binary="",
         unity_scene="home_building_1",
@@ -107,7 +101,6 @@ unitree_g1_nav_sim = autoconnect(
         ]
     ),
     TerrainMapExt.blueprint(),
-    FarPlanner.blueprint(),
     LocalPlanner.blueprint(
         extra_args=[
             "--autonomyMode",
@@ -152,10 +145,10 @@ unitree_g1_nav_sim = autoconnect(
 
 
 def main() -> None:
-    unitree_g1_nav_sim.build().loop()
+    unitree_g1_nav_basic_sim.build().loop()
 
 
-__all__ = ["unitree_g1_nav_sim"]
+__all__ = ["unitree_g1_nav_basic_sim"]
 
 if __name__ == "__main__":
     main()
