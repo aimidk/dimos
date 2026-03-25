@@ -140,7 +140,7 @@ class ModuleThread:
 
     def __init__(
         self,
-        module: ModuleBase,
+        module: ModuleBase[Any],
         *,
         start: bool = True,
         close_timeout: float = 2.0,
@@ -221,7 +221,7 @@ class AsyncModuleThread:
 
     def __init__(
         self,
-        module: ModuleBase,
+        module: ModuleBase[Any],
         *,
         close_timeout: float = 2.0,
     ) -> None:
@@ -307,7 +307,7 @@ class ModuleProcess:
 
     def __init__(
         self,
-        module: ModuleBase,
+        module: ModuleBase[Any],
         args: list[str] | str,
         *,
         env: dict[str, str] | None = None,
@@ -317,6 +317,7 @@ class ModuleProcess:
         shutdown_timeout: float = 10.0,
         kill_timeout: float = 5.0,
         log_json: bool = False,
+        log_tail_lines: int = 50,
         start: bool = True,
         **popen_kwargs: Any,
     ) -> None:
@@ -328,13 +329,15 @@ class ModuleProcess:
         self._shutdown_timeout = shutdown_timeout
         self._kill_timeout = kill_timeout
         self._log_json = log_json
+        self._log_tail_lines = log_tail_lines
         self._popen_kwargs = popen_kwargs
         self._process: subprocess.Popen[bytes] | None = None
         self._watchdog: ModuleThread | None = None
         self._module = module
         self._stopped = False
         self._stop_lock = threading.Lock()
-        self.last_stderr: collections.deque[str] = collections.deque(maxlen=50)
+        self.last_stdout: collections.deque[str] = collections.deque(maxlen=log_tail_lines)
+        self.last_stderr: collections.deque[str] = collections.deque(maxlen=log_tail_lines)
 
         module._disposables.add(Disposable(self.stop))
         if start:
@@ -362,6 +365,9 @@ class ModuleProcess:
 
         with self._stop_lock:
             self._stopped = False
+
+        self.last_stdout = collections.deque(maxlen=self._log_tail_lines)
+        self.last_stderr = collections.deque(maxlen=self._log_tail_lines)
 
         logger.info(
             "Starting process",
@@ -432,12 +438,14 @@ class ModuleProcess:
             if self._stopped:
                 return
 
-        last_stderr = "\n".join(self.last_stderr)
+        last_stdout = "\n".join(self.last_stdout) or None
+        last_stderr = "\n".join(self.last_stderr) or None
         logger.error(
             "Process died unexpectedly",
             pid=proc.pid,
             returncode=rc,
-            last_stderr=last_stderr[:500] if last_stderr else None,
+            last_stdout=last_stdout,
+            last_stderr=last_stderr,
         )
         if self._on_exit is not None:
             self._on_exit()
@@ -452,12 +460,12 @@ class ModuleProcess:
             return
         log_fn = getattr(logger, level)
         is_stderr = level == "warning"
+        buf = self.last_stderr if is_stderr else self.last_stdout
         for raw in stream:
             line = raw.decode("utf-8", errors="replace").rstrip()
             if not line:
                 continue
-            if is_stderr:
-                self.last_stderr.append(line)
+            buf.append(line)
             if self._log_json:
                 try:
                     data = json.loads(line)
