@@ -12,11 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Docker module support: image building, Dockerfile conversion, host-side
-proxy (DockerModuleProxy), and container-side runner (DockerModuleInner).
-"""
-
 from __future__ import annotations
 
 import argparse
