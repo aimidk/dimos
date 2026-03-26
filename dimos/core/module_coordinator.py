@@ -28,7 +28,7 @@ from dimos.utils.thread_utils import safe_thread_map
 from dimos.utils.typing_utils import ExceptionGroup
 
 if TYPE_CHECKING:
-    from dimos.core.blueprints import ModuleRefWiring, RpcWiringPlan, StreamWiring
+    from dimos.core.blueprints import DeploySpec, ModuleRefWiring, RpcWiringPlan, StreamWiring
     from dimos.core.rpc_client import ModuleProxy, ModuleProxyProtocol
 
 logger = setup_logger()
@@ -47,13 +47,16 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
 
     _managers: list[WorkerManagerDocker | WorkerManagerPython]
     _global_config: GlobalConfig
+    _deploy_spec: DeploySpec | None
     _deployed_modules: dict[type[ModuleBase], ModuleProxyProtocol]
 
     def __init__(
         self,
         g: GlobalConfig = global_config,
+        deploy_spec: DeploySpec | None = None,
     ) -> None:
         self._global_config = g
+        self._deploy_spec = deploy_spec
         self._managers = []
         self._deployed_modules = {}
 
@@ -64,6 +67,15 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
         ]
         for m in self._managers:
             m.start()
+
+        if self._deploy_spec is not None:
+            spec = self._deploy_spec
+            self.deploy_parallel(spec.module_specs)
+            self._wire_streams(spec.stream_wiring)
+            self._wire_rpc_methods(spec.rpc_wiring)
+            self._wire_module_refs(spec.module_ref_wiring)
+            self._build_all_modules()
+            self.start_all_modules()
 
     def _find_manager(
         self, module_class: type[ModuleBase[Any]]
@@ -143,20 +155,20 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
         def _on_errors(
             _outcomes: list[Any], _successes: list[Any], errors: list[Exception]
         ) -> None:
-            _register()
+            # Don't register partially-deployed modules — managers handle their own cleanup.
             raise ExceptionGroup("deploy_parallel failed", errors)
 
         safe_thread_map(list(groups.keys()), _deploy_group, _on_errors)
         _register()
         return results
 
-    def wire_streams(self, wiring: list[StreamWiring]) -> None:
+    def _wire_streams(self, wiring: list[StreamWiring]) -> None:
         """Apply stream transports to deployed modules."""
         for w in wiring:
             instance = self.get_instance(w.module_class)
             instance.set_transport(w.stream_name, w.transport)  # type: ignore[union-attr]
 
-    def wire_rpc_methods(self, plan: RpcWiringPlan) -> None:
+    def _wire_rpc_methods(self, plan: RpcWiringPlan) -> None:
         """Wire RPC methods between modules using the compiled plan."""
         # Build callable registry from deployed instances
         callables: dict[str, Any] = {}
@@ -176,7 +188,7 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
                 instance = self.get_instance(module_class)
                 instance.set_rpc_method(requested_name, callables[rpc_key])  # type: ignore[union-attr]
 
-    def wire_module_refs(self, wiring: list[ModuleRefWiring]) -> None:
+    def _wire_module_refs(self, wiring: list[ModuleRefWiring]) -> None:
         """Set module references between deployed modules."""
         for w in wiring:
             base_proxy = self.get_instance(w.base_module)
@@ -184,7 +196,7 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
             setattr(base_proxy, w.ref_name, target_proxy)
             base_proxy.set_module_ref(w.ref_name, target_proxy)  # type: ignore[union-attr]
 
-    def build_all_modules(self) -> None:
+    def _build_all_modules(self) -> None:
         """Call build() on all deployed modules in parallel.
 
         build() handles heavy one-time work (docker builds, LFS downloads, etc.)

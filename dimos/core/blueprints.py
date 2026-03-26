@@ -86,6 +86,16 @@ class RpcWiringPlan:
 
 
 @dataclass(frozen=True)
+class DeploySpec:
+    """Complete deployment specification compiled by Blueprint.build()."""
+
+    module_specs: list[ModuleSpec]
+    stream_wiring: list[StreamWiring]
+    rpc_wiring: RpcWiringPlan
+    module_ref_wiring: list[ModuleRefWiring]
+
+
+@dataclass(frozen=True)
 class _BlueprintAtom:
     kwargs: dict[str, Any]
     module: type[ModuleBase[Any]]
@@ -389,7 +399,7 @@ class Blueprint:
                     mod_and_mod_ref_to_target[key] = possible_module_candidates[0]
                 elif len(valid_module_candidates) > 1:
                     raise Exception(
-                        f"""The {blueprint.module.__name__} has a module reference ({each_module_ref}) which requested a module that fills out the {each_module_ref.spec.__name__} spec. But I found multiple modules that met that spec: {possible_module_candidates}.\nTo fix this use .remappings, for example:\n    autoconnect(...).remappings([ ({blueprint.module.__name__}, {each_module_ref.name!r}, <ModuleThatHasTheRpcCalls>) ])\n"""
+                        f"""The {blueprint.module.__name__} has a module reference ({each_module_ref}) which requested a module that fills out the {each_module_ref.spec.__name__} spec. But I found multiple modules that met that spec: {valid_module_candidates}.\nTo fix this use .remappings, for example:\n    autoconnect(...).remappings([ ({blueprint.module.__name__}, {each_module_ref.name!r}, <ModuleThatHasTheRpcCalls>) ])\n"""
                     )
                 elif len(valid_module_candidates) == 0:
                     possible_module_candidates_str = ", ".join(
@@ -492,23 +502,18 @@ class Blueprint:
         self._check_requirements()
         self._verify_no_name_conflicts()
 
-        # Phase 3: Compile wiring plans (pure — no side effects)
-        module_specs = self._compile_module_specs(global_config)
-        stream_wiring = self._compile_stream_wiring()
-        module_ref_wiring = self._compile_module_ref_wiring()
-        rpc_wiring = self._compile_rpc_wiring()
+        # Phase 3: Compile deploy spec (pure — no side effects)
+        deploy_spec = DeploySpec(
+            module_specs=self._compile_module_specs(global_config),
+            stream_wiring=self._compile_stream_wiring(),
+            module_ref_wiring=self._compile_module_ref_wiring(),
+            rpc_wiring=self._compile_rpc_wiring(),
+        )
 
         # Phase 4: Execute (all mutations go through coordinator)
         logger.info("Starting the modules")
-        coordinator = ModuleCoordinator(g=global_config)
+        coordinator = ModuleCoordinator(g=global_config, deploy_spec=deploy_spec)
         coordinator.start()
-        coordinator.deploy_parallel(module_specs)
-        coordinator.wire_streams(stream_wiring)
-        coordinator.wire_rpc_methods(rpc_wiring)
-        coordinator.wire_module_refs(module_ref_wiring)
-        coordinator.build_all_modules()
-        coordinator.start_all_modules()
-
         return coordinator
 
 
