@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from dimos.core.resource import CompositeResource
 from dimos.memory2.buffer import BackpressureBuffer, KeepLast
@@ -32,6 +32,7 @@ from dimos.memory2.type.filter import (
     TimeRangeFilter,
 )
 from dimos.memory2.type.observation import EmbeddedObservation, Observation
+from dimos.utils.logging_config import setup_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 R = TypeVar("R")
+logger = setup_logger()
 
 
 class Stream(CompositeResource, Generic[T]):
@@ -360,12 +362,9 @@ class Stream(CompositeResource, Generic[T]):
 
             lidar.live().transform(VoxelMapTransformer()).publish(self.global_map)
         """
-        import logging
-
-        log = logging.getLogger(__name__)
 
         def _on_error(e: Exception) -> None:
-            log.error("Stream.publish() pipeline error: %s", e, exc_info=True)
+            logger.error("Stream.publish() pipeline error: %s", e, exc_info=True)
 
         return self.subscribe(
             on_next=lambda obs: out.publish(obs.data),
@@ -412,7 +411,7 @@ class Stream(CompositeResource, Generic[T]):
                 result = result.offset(query.offset_val)
             if query.order_field is not None:
                 result = result.order_by(query.order_field, desc=query.order_desc)
-        return result  # type: ignore[return-value]
+        return cast("Stream[R]", result)
 
     def append(
         self,
