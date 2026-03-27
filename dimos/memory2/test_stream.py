@@ -26,13 +26,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 from dimos.memory2.buffer import KeepLast, Unbounded
+from dimos.memory2.store.memory import MemoryStore
+from dimos.memory2.stream import Stream
 from dimos.memory2.transform import FnTransformer, QualityWindow, Transformer
 from dimos.memory2.type.observation import Observation
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from dimos.memory2.stream import Stream
 
 
 @pytest.fixture
@@ -315,6 +315,111 @@ class TestTransformChaining:
         # The transformer should have processed at most a few more than 3
         # (not all 100) due to lazy evaluation
         assert len(calls) == 3
+
+
+class TestUnboundStream:
+    """Unbound streams: pipelines built without a source, applied later via .chain()."""
+
+    def test_creation(self) -> None:
+        """Stream() with no args creates an unbound stream."""
+        s = Stream()
+        assert s._transform is None
+
+    def test_multi_transform_chain(self) -> None:
+        """Unbound pipeline with multiple transforms produces correct results when bound."""
+
+        class Double(Transformer[int, int]):
+            def __call__(self, upstream):
+                for obs in upstream:
+                    yield obs.derive(data=obs.data * 2)
+
+        pipeline = Stream().transform(Double()).map(lambda obs: obs.derive(data=obs.data + 1))
+
+        store = MemoryStore()
+        with store:
+            stream = store.stream("test", int)
+            stream.append(5)
+            stream.append(10)
+
+            result = stream.chain(pipeline).fetch()
+            assert [obs.data for obs in result] == [11, 21]
+
+    def test_iteration_raises(self) -> None:
+        """Iterating an unbound stream raises TypeError."""
+        s = Stream().transform(FnTransformer(lambda obs: obs))
+        with pytest.raises(TypeError, match="unbound"):
+            list(s)
+
+    def test_chain_applies_transforms(self) -> None:
+        """chain() replays unbound transforms on a real stream."""
+        store = MemoryStore()
+        with store:
+            stream = store.stream("test", int)
+            stream.append(10)
+            stream.append(20)
+            stream.append(30)
+
+            class Double(Transformer[int, int]):
+                def __call__(self, upstream):
+                    for obs in upstream:
+                        yield obs.derive(data=obs.data * 2)
+
+            pipeline = Stream().transform(Double())
+            result = stream.chain(pipeline).fetch()
+            assert [obs.data for obs in result] == [20, 40, 60]
+
+    def test_chain_multiple_transforms(self) -> None:
+        """chain() preserves order of multiple transforms."""
+        store = MemoryStore()
+        with store:
+            stream = store.stream("test", int)
+            stream.append(5)
+
+            class Double(Transformer[int, int]):
+                def __call__(self, upstream):
+                    for obs in upstream:
+                        yield obs.derive(data=obs.data * 2)
+
+            class AddTen(Transformer[int, int]):
+                def __call__(self, upstream):
+                    for obs in upstream:
+                        yield obs.derive(data=obs.data + 10)
+
+            pipeline = Stream().transform(Double()).transform(AddTen())
+            result = stream.chain(pipeline).fetch()
+            assert result[0].data == 20  # (5 * 2) + 10
+
+    def test_chain_preserves_filters(self) -> None:
+        """chain() replays filters from the unbound stream."""
+        store = MemoryStore()
+        with store:
+            stream = store.stream("test", int)
+            stream.append(10, ts=1.0)
+            stream.append(20, ts=2.0)
+            stream.append(30, ts=3.0)
+
+            pipeline = Stream().after(1.5)
+            result = stream.chain(pipeline).fetch()
+            assert [obs.data for obs in result] == [20, 30]
+
+    def test_chain_rejects_bound_stream(self) -> None:
+        """chain() raises if passed a bound (non-unbound) stream."""
+        store = MemoryStore()
+        with store:
+            s1 = store.stream("a", int)
+            s2 = store.stream("b", int)
+            with pytest.raises(TypeError, match="unbound"):
+                s1.chain(s2)
+
+    def test_live_rejects_unbound(self) -> None:
+        """live() raises on an unbound stream."""
+        with pytest.raises(TypeError, match="unbound"):
+            Stream().live()
+
+    def test_str(self) -> None:
+        """Unbound streams display as Stream(unbound)."""
+        s = Stream()
+        assert "unbound" in str(s)
 
 
 class TestStore:
