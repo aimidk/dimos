@@ -23,22 +23,19 @@ This module replaces the TF / camera_info / cmd_vel parts of the old
 DimSimConnection while the NativeModule bridge handles sensor data directly.
 """
 
-from __future__ import annotations
-
 import math
 from threading import Thread
 import time
+from typing import Optional
 
 from dimos.core.core import rpc
 from dimos.core.module import Module
 from dimos.core.stream import In, Out
-from dimos.msgs.geometry_msgs import (
-    PoseStamped,
-    Quaternion,
-    Transform,
-    Twist,
-    Vector3,
-)
+from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
+from dimos.msgs.geometry_msgs.Quaternion import Quaternion
+from dimos.msgs.geometry_msgs.Transform import Transform
+from dimos.msgs.geometry_msgs.Twist import Twist
+from dimos.msgs.geometry_msgs.Vector3 import Vector3
 from dimos.msgs.sensor_msgs.CameraInfo import CameraInfo
 from dimos.utils.logging_config import setup_logger
 
@@ -87,8 +84,8 @@ class DimSimTF(Module):
     camera_info: Out[CameraInfo]
     cmd_vel: Out[Twist]
 
-    _camera_info_thread: Thread | None = None
-    _latest_odom: PoseStamped | None = None
+    _camera_info_thread: Optional[Thread] = None
+    _latest_odom: Optional[PoseStamped] = None
     _odom_last_ts: float = 0.0
     _odom_count: int = 0
 

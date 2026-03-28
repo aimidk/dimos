@@ -21,6 +21,7 @@ from dimos.agents.skills.person_follow import PersonFollowSkillContainer
 from dimos.agents.skills.speak_skill import SpeakSkill
 from dimos.agents.web_human_input import WebInput
 from dimos.core.blueprints import autoconnect
+from dimos.navigation.patrolling.module import PatrollingModule
 from dimos.robot.sim.blueprints.nav.sim_spatial import sim_spatial
 from dimos.robot.sim.tf_module import _camera_info_static
 
@@ -30,6 +31,7 @@ sim_agentic = autoconnect(
     McpClient.blueprint(),
     NavigationSkillContainer.blueprint(),
     PersonFollowSkillContainer.blueprint(camera_info=_camera_info_static()),
+    PatrollingModule.blueprint(),
     WebInput.blueprint(),
     SpeakSkill.blueprint(),
 )

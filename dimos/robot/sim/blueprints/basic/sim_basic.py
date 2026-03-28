@@ -19,7 +19,7 @@ from typing import Any
 from dimos.core.blueprints import autoconnect
 from dimos.core.global_config import global_config
 from dimos.core.transport import JpegLcmTransport
-from dimos.msgs.sensor_msgs import Image
+from dimos.msgs.sensor_msgs.Image import Image
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
 from dimos.robot.sim.bridge import sim_bridge
 from dimos.robot.sim.tf_module import sim_tf
@@ -92,6 +92,10 @@ def _convert_navigation_costmap(grid: Any) -> Any:
     )
 
 
+def _suppress(_msg: Any) -> None:
+    return None
+
+
 def _static_base_link(rr: Any) -> list[Any]:
     return [
         rr.Boxes3D(
@@ -109,7 +113,7 @@ rerun_config = {
         "world/color_image": _convert_color_image,
         "world/global_map": _convert_global_map,
         "world/navigation_costmap": _convert_navigation_costmap,
-        "world/pointcloud": None,
+        "world/pointcloud": _suppress,
     },
     "static": {
         "world/tf/base_link": _static_base_link,

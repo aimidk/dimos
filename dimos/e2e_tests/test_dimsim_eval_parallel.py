@@ -27,6 +27,7 @@ from pathlib import Path
 import signal
 import socket
 import subprocess
+import sys
 import time
 
 import pytest
@@ -222,7 +223,9 @@ def parallel_env():
 
     calls: list[DimosCliCall] = []
     log_files: list = []
-    base_env = {**os.environ, "DIMSIM_HEADLESS": "1", "DIMSIM_RENDER": "gpu"}
+    venv_bin = str(Path(sys.prefix) / "bin")
+    base_env = {**os.environ, "DIMSIM_HEADLESS": "1", "DIMSIM_RENDER": "gpu",
+                "PATH": venv_bin + os.pathsep + os.environ.get("PATH", "")}
     log_dir_env = os.environ.get("DIMSIM_EVAL_LOG_DIR", "")
     log_dir = Path(log_dir_env) if log_dir_env else None
     if log_dir:

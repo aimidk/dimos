@@ -26,14 +26,18 @@ from pathlib import Path
 import signal
 import socket
 import subprocess
+import sys
 import time
 
 import pytest
 
 from dimos.e2e_tests.dimos_cli_call import DimosCliCall
 from dimos.e2e_tests.lcm_spy import LcmSpy
-from dimos.msgs.geometry_msgs import PoseStamped, Twist, Vector3
-from dimos.msgs.sensor_msgs import Image, PointCloud2
+from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
+from dimos.msgs.geometry_msgs.Twist import Twist
+from dimos.msgs.geometry_msgs.Vector3 import Vector3
+from dimos.msgs.sensor_msgs.Image import Image
+from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
 
 BRIDGE_PORT = 8090
 
@@ -99,7 +103,9 @@ def sim_nav():
         log_file = None
 
     render = os.environ.get("DIMSIM_RENDER", "cpu")
-    env = {**os.environ, "DIMSIM_HEADLESS": "1", "DIMSIM_RENDER": render}
+    venv_bin = str(Path(sys.prefix) / "bin")
+    env = {**os.environ, "DIMSIM_HEADLESS": "1", "DIMSIM_RENDER": render,
+           "PATH": venv_bin + os.pathsep + os.environ.get("PATH", "")}
     call = DimosCliCall()
     call.demo_args = ["sim-nav"]
     call.process = subprocess.Popen(

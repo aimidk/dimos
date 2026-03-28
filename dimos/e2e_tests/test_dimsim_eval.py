@@ -27,6 +27,7 @@ from pathlib import Path
 import signal
 import socket
 import subprocess
+import sys
 import time
 
 import pytest
@@ -153,7 +154,9 @@ def sim_eval():
     spy.save_topic("/odom#geometry_msgs.PoseStamped")
     spy.start()
 
-    env = {**os.environ, "DIMSIM_HEADLESS": "1", "DIMSIM_RENDER": "gpu"}
+    venv_bin = str(Path(sys.prefix) / "bin")
+    env = {**os.environ, "DIMSIM_HEADLESS": "1", "DIMSIM_RENDER": "gpu",
+           "PATH": venv_bin + os.pathsep + os.environ.get("PATH", "")}
     call = DimosCliCall()
     call.demo_args = ["sim-eval"]
     call.process = subprocess.Popen(

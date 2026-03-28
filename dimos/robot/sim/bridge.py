@@ -28,23 +28,23 @@ Usage::
     autoconnect(sim_bridge(), sim_tf(), some_consumer()).build().loop()
 """
 
-from __future__ import annotations
-
-from dataclasses import dataclass, field
 import os
 from pathlib import Path
 import shutil
-from typing import TYPE_CHECKING
+from typing import Optional
+
+from pydantic import Field
 
 from dimos.core.core import rpc
 from dimos.core.native_module import NativeModule, NativeModuleConfig
+from dimos.core.stream import In, Out
+from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
+from dimos.msgs.geometry_msgs.Twist import Twist
+from dimos.msgs.sensor_msgs.CameraInfo import CameraInfo
+from dimos.msgs.sensor_msgs.Image import Image
+from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
 from dimos.spec.perception import Camera, Pointcloud
 from dimos.utils.logging_config import setup_logger
-
-if TYPE_CHECKING:
-    from dimos.core.stream import In, Out
-    from dimos.msgs.geometry_msgs import PoseStamped, Twist
-    from dimos.msgs.sensor_msgs import CameraInfo, Image, PointCloud2
 
 logger = setup_logger()
 
@@ -62,21 +62,20 @@ def _find_deno() -> str:
     return shutil.which("deno") or str(Path.home() / ".deno" / "bin" / "deno")
 
 
-def _find_local_cli() -> Path | None:
+def _find_local_cli() -> Optional[Path]:
     """Find local DimSim/dimos-cli/cli.ts for development."""
     repo_root = Path(__file__).resolve().parents[4]
     candidate = repo_root / "DimSim" / "dimos-cli" / "cli.ts"
     return candidate if candidate.exists() else None
 
 
-@dataclass(kw_only=True)
 class DimSimBridgeConfig(NativeModuleConfig):
     """Configuration for the DimSim bridge subprocess."""
 
     # Resolved in _resolve_paths() — compiled binary or deno (local dev).
     executable: str = "dimsim"
-    build_command: str | None = None
-    cwd: str | None = None
+    build_command: Optional[str] = None
+    cwd: Optional[str] = None
 
     scene: str = "apt"
     port: int = 8090
@@ -86,7 +85,7 @@ class DimSimBridgeConfig(NativeModuleConfig):
     cli_exclude: frozenset[str] = frozenset({"scene", "port", "local"})
 
     # Populated by _resolve_paths() — deno run args + dev subcommand + scene/port.
-    extra_args: list[str] = field(default_factory=list)
+    extra_args: list[str] = Field(default_factory=list)
 
 
 class DimSimBridge(NativeModule, Camera, Pointcloud):
