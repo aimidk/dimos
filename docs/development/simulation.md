@@ -184,19 +184,6 @@ To include your eval in automated test runs, add it to `~/.dimsim/evals/manifest
 }
 ```
 
-### Running a Single Eval
-
-```bash
-# Headless (no browser window)
-dimsim eval --headless --env apt --workflow go-to-tv
-
-# Connect to an already-running DimSim server
-dimsim eval --connect --env apt --workflow go-to-tv
-
-# With browser (for debugging)
-dimsim dev --eval go-to-tv --scene apt
-```
-
 ## Environment Variables
 
 | Variable | Purpose | Default |
