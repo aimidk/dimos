@@ -31,7 +31,8 @@ RUN apt-get update && apt-get install -y \
     qtbase5-dev-tools \
     supervisor \
     iproute2 # for LCM networking system config \
-    liblcm-dev
+    liblcm-dev \
+    libturbojpeg0-dev
 
 # Fix distutils-installed packages that block pip upgrades
 RUN apt-get purge -y python3-blinker python3-sympy python3-oauthlib || true
@@ -42,13 +43,3 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
-
-# Copy entire project first to ensure proper package installation
-COPY . /app/
-
-# Install dependencies with UV (10-100x faster than pip)
-RUN uv pip install --upgrade 'pip>=24' 'setuptools>=70' 'wheel' 'packaging>=24' && \
-    uv pip install '.[misc,cpu,sim,drone,unitree,web,perception,visualization,manipulation]'
-
-# Remove pydrake .pyi stubs that use Python 3.12 syntax (breaks mypy on 3.10)
-RUN find /usr/local/lib/python3.10/dist-packages/pydrake -name '*.pyi' -delete

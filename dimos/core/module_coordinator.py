@@ -12,43 +12,57 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from concurrent.futures import ThreadPoolExecutor
-import time
-from typing import TYPE_CHECKING, Any
+from __future__ import annotations
+
+import threading
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from dimos.core.global_config import GlobalConfig, global_config
-from dimos.core.module import Module, ModuleT
+from dimos.core.module import ModuleBase, ModuleSpec
 from dimos.core.resource import Resource
 from dimos.core.worker_manager import WorkerManager
+from dimos.core.worker_manager_docker import WorkerManagerDocker
 from dimos.utils.logging_config import setup_logger
+from dimos.utils.safe_thread_map import safe_thread_map
 
 if TYPE_CHECKING:
-    from dimos.core.rpc_client import ModuleProxy
+    from dimos.core.rpc_client import ModuleProxy, ModuleProxyProtocol
 
 logger = setup_logger()
 
+DeploymentManager: TypeAlias = WorkerManagerDocker | WorkerManager
+
 
 class ModuleCoordinator(Resource):  # type: ignore[misc]
-    _client: WorkerManager | None = None
+    _managers: dict[str, DeploymentManager]
     _global_config: GlobalConfig
-    _n: int | None = None
-    _memory_limit: str = "auto"
-    _deployed_modules: dict[type[Module], "ModuleProxy"]
+    _deployed_modules: dict[type[ModuleBase], ModuleProxyProtocol]
 
     def __init__(
         self,
-        n: int | None = None,
-        cfg: GlobalConfig = global_config,
+        g: GlobalConfig = global_config,
     ) -> None:
-        self._n = n if n is not None else cfg.n_workers
-        self._memory_limit = cfg.memory_limit
-        self._global_config = cfg
+        self._global_config = g
+        manager_types: list[type[DeploymentManager]] = [WorkerManagerDocker, WorkerManager]
+        self._managers: dict[str, DeploymentManager] = {
+            cls.deployment_identifier: cls(g=g) for cls in manager_types
+        }
         self._deployed_modules = {}
 
     def start(self) -> None:
-        n = self._n if self._n is not None else 2
-        self._client = WorkerManager(n_workers=n)
-        self._client.start()
+        for m in self._managers.values():
+            m.start()
+
+    def health_check(self) -> bool:
+        return all(m.health_check() for m in self._managers.values())
+
+    @property
+    def n_modules(self) -> int:
+        return len(self._deployed_modules)
+
+    def suppress_console(self) -> None:
+        for m in self._managers.values():
+            m.suppress_console()
 
     def stop(self) -> None:
         for module_class, module in reversed(self._deployed_modules.items()):
@@ -59,48 +73,99 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
                 logger.error("Error stopping module", module=module_class.__name__, exc_info=True)
             logger.info("Module stopped.", module=module_class.__name__)
 
-        self._client.close_all()  # type: ignore[union-attr]
+        def _stop_manager(m: DeploymentManager) -> None:
+            try:
+                m.stop()
+            except Exception:
+                logger.error("Error stopping manager", manager=type(m).__name__, exc_info=True)
 
-    def deploy(self, module_class: type[ModuleT], *args, **kwargs) -> "ModuleProxy":  # type: ignore[no-untyped-def]
-        if not self._client:
+        safe_thread_map(tuple(self._managers.values()), _stop_manager)
+
+    def deploy(
+        self,
+        module_class: type[ModuleBase[Any]],
+        global_config: GlobalConfig = global_config,
+        **kwargs: Any,
+    ) -> ModuleProxy:
+        if not self._managers:
             raise ValueError("Trying to dimos.deploy before the client has started")
 
-        module: ModuleProxy = self._client.deploy(module_class, *args, **kwargs)  # type: ignore[union-attr, attr-defined, assignment]
-        self._deployed_modules[module_class] = module
-        return module
+        deployed_module = self._managers[module_class.deployment].deploy(
+            module_class, global_config, kwargs
+        )
+        self._deployed_modules[module_class] = deployed_module  # type: ignore[assignment]
+        return deployed_module  # type: ignore[return-value]
 
-    def deploy_parallel(
-        self, module_specs: list[tuple[type[ModuleT], tuple[Any, ...], dict[str, Any]]]
-    ) -> list["ModuleProxy"]:
-        if not self._client:
+    def deploy_parallel(self, module_specs: list[ModuleSpec]) -> list[ModuleProxy]:
+        if not self._managers:
             raise ValueError("Not started")
 
-        modules = self._client.deploy_parallel(module_specs)
-        for (module_class, _, _), module in zip(module_specs, modules, strict=True):
-            self._deployed_modules[module_class] = module  # type: ignore[assignment]
-        return modules  # type: ignore[return-value]
+        # Group specs by deployment type, tracking original indices for reassembly
+        indices_by_deployment: dict[str, list[int]] = {}
+        specs_by_deployment: dict[str, list[ModuleSpec]] = {}
+        for index, spec in enumerate(module_specs):
+            # spec = (module_class, global_config, kwargs)
+            dep = spec[0].deployment
+            indices_by_deployment.setdefault(dep, []).append(index)
+            specs_by_deployment.setdefault(dep, []).append(spec)
+
+        results: list[Any] = [None] * len(module_specs)
+
+        def _deploy_group(dep: str) -> None:
+            deployed = self._managers[dep].deploy_parallel(specs_by_deployment[dep])
+            for index, module in zip(indices_by_deployment[dep], deployed, strict=True):
+                results[index] = module
+
+        try:
+            safe_thread_map(list(specs_by_deployment.keys()), _deploy_group)
+        except:
+            self.stop()
+            raise
+
+        self._deployed_modules.update(
+            {
+                cls: mod
+                for (cls, _, _), mod in zip(module_specs, results, strict=True)
+                if mod is not None
+            }
+        )
+        return results
+
+    def build_all_modules(self) -> None:
+        """Call build() on all deployed modules in parallel.
+
+        build() handles heavy one-time work (docker builds, LFS downloads, etc.)
+        with a very long timeout. Must be called after deploy and stream wiring
+        but before start_all_modules().
+        """
+        modules = list(self._deployed_modules.values())
+        if not modules:
+            raise ValueError("No modules deployed. Call deploy() before build_all_modules().")
+
+        try:
+            safe_thread_map(modules, lambda m: m.build())
+        except:
+            self.stop()
+            raise
 
     def start_all_modules(self) -> None:
         modules = list(self._deployed_modules.values())
-        if isinstance(self._client, WorkerManager):
-            with ThreadPoolExecutor(max_workers=len(modules)) as executor:
-                list(executor.map(lambda m: m.start(), modules))
-        else:
-            for module in modules:
-                module.start()
+        if not modules:
+            raise ValueError("No modules deployed. Call deploy() before start_all_modules().")
 
-        module_list = list(self._deployed_modules.values())
+        safe_thread_map(modules, lambda m: m.start())
+
         for module in modules:
             if hasattr(module, "on_system_modules"):
-                module.on_system_modules(module_list)
+                module.on_system_modules(modules)
 
-    def get_instance(self, module: type[ModuleT]) -> "ModuleProxy":
+    def get_instance(self, module: type[ModuleBase]) -> ModuleProxy:
         return self._deployed_modules.get(module)  # type: ignore[return-value, no-any-return]
 
     def loop(self) -> None:
+        stop = threading.Event()
         try:
-            while True:
-                time.sleep(0.1)
+            stop.wait()
         except KeyboardInterrupt:
             return
         finally:

@@ -18,7 +18,6 @@ Every test launches the real native_echo.py subprocess via blueprint.build().
 The echo script writes received CLI args to a temp file for assertions.
 """
 
-from dataclasses import dataclass
 import json
 from pathlib import Path
 import time
@@ -59,7 +58,6 @@ def read_json_file(path: str) -> dict[str, str]:
     return result
 
 
-@dataclass(kw_only=True)
 class StubNativeConfig(NativeModuleConfig):
     executable: str = _ECHO
     log_format: LogFormat = LogFormat.TEXT
@@ -109,6 +107,13 @@ def test_process_crash_triggers_stop() -> None:
 
     assert mod._process is None, f"Watchdog did not clean up after process {pid} died"
 
+    # Wait for background threads (run_forever, _lcm_loop, _watch_process) to finish
+    # after the watchdog-triggered stop(). Without this, monitor_threads catches them.
+    time.sleep(0.5)
+
+    # Ensure all threads (LCM transport, event loop) are cleaned up
+    mod.stop()
+
 
 @pytest.mark.slow
 def test_manual(dimos_cluster: ModuleCoordinator, args_file: str) -> None:
@@ -148,7 +153,7 @@ def test_autoconnect(args_file: str) -> None:
         },
     )
 
-    coordinator = blueprint.global_config(viewer_backend="none").build()
+    coordinator = blueprint.global_config(viewer="none").build()
     try:
         # Validate blueprint wiring: all modules deployed
         native = coordinator.get_instance(StubNativeModule)  # type: ignore[type-var]
@@ -165,6 +170,12 @@ def test_autoconnect(args_file: str) -> None:
 
         # Custom transport was applied
         assert native.pointcloud.transport.topic.topic == "/my/custom/lidar"
+
+        # Wait for the native subprocess to write the output file
+        for _ in range(50):
+            if Path(args_file).exists():
+                break
+            time.sleep(0.1)
     finally:
         coordinator.stop()
 
