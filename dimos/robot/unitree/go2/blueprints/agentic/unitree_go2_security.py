@@ -14,9 +14,15 @@
 # limitations under the License.
 
 from typing import Any
+import sys
 
+from dimos.constants import DEFAULT_CAPACITY_COLOR_IMAGE
 from dimos.core.blueprints import autoconnect
+from dimos.core.transport import pSHMTransport
+from dimos.msgs.sensor_msgs.Image import Image
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
+from dimos.protocol.pubsub.impl.shmpubsub import ShmSubset
+from dimos.experimental.security_demo.color_image_listener import color_image_listener
 from dimos.robot.unitree.go2.blueprints.agentic.unitree_go2_agentic import unitree_go2_agentic
 from dimos.visualization.rerun.bridge import RerunBridgeModule, _resolve_viewer_mode
 
@@ -64,7 +70,7 @@ def _go2_rerun_blueprint() -> Any:
                 row_shares=[1, 1, 1],
             ),
             rrb.Vertical(
-                rrb.Spatial2DView(origin="world/tracking_image", name="Info"),
+                rrb.Spatial2DView(origin="world/detection", name="Info"),
                 rrb.Spatial3DView(origin="world", name="3D"),
                 row_shares=[1, 2],
             ),
@@ -75,9 +81,16 @@ def _go2_rerun_blueprint() -> Any:
     )
 
 
-rerun_config = {
+rerun_config: dict[str, Any] = {
     "blueprint": _go2_rerun_blueprint,
-    "pubsubs": [LCM()],
+    "pubsubs": [
+        LCM(),
+        ShmSubset(topics=[
+            ("/color_image", DEFAULT_CAPACITY_COLOR_IMAGE, "pickle"),
+            ("/depth_image", DEFAULT_CAPACITY_COLOR_IMAGE, "pickle"),
+            ("/tracking_image", DEFAULT_CAPACITY_COLOR_IMAGE, "pickle"),
+        ]),
+    ],
     "visual_override": {
         "world/camera_info": _convert_camera_info,
         "world/global_map": _convert_global_map,
@@ -88,9 +101,25 @@ rerun_config = {
     },
 }
 
-unitree_go2_security = autoconnect(
-    unitree_go2_agentic,
-    RerunBridgeModule.blueprint(viewer_mode=_resolve_viewer_mode(), **rerun_config),
-).global_config(n_workers=12)
+if sys.platform == "darwin":
+    _shm_overrides: dict[tuple[str, type], pSHMTransport[Image]] = {
+        ("depth_image", Image): pSHMTransport(
+            "/depth_image", default_capacity=DEFAULT_CAPACITY_COLOR_IMAGE
+        ),
+        ("tracking_image", Image): pSHMTransport(
+            "/tracking_image", default_capacity=DEFAULT_CAPACITY_COLOR_IMAGE
+        ),
+    }
+
+
+unitree_go2_security = (
+    autoconnect(
+        unitree_go2_agentic,
+        color_image_listener(),
+        RerunBridgeModule.blueprint(viewer_mode=_resolve_viewer_mode(), **rerun_config),
+    )
+    .transports(_shm_overrides)
+    .global_config(n_workers=12)
+)
 
 __all__ = ["unitree_go2_security"]

@@ -20,12 +20,11 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import cv2
 import numpy as np
-import torch
-from dimos_lcm.std_msgs import String, Bool
+from dimos_lcm.std_msgs import Bool, String
 from reactivex.disposable import Disposable
 
 from dimos.agents.annotation import skill
-from dimos.experimental.security_demo.depth_estimator import DepthEstimator
+from dimos.experimental.security_demo.depth_estimator import load_depth_model
 from dimos.core.core import rpc
 from dimos.core.global_config import GlobalConfig
 from dimos.core.module import Module, ModuleConfig
@@ -107,6 +106,7 @@ State = Literal["IDLE", "PATROLLING", "FOLLOWING"]
 class SecurityModuleConfig(ModuleConfig):
     camera_info: CameraInfo
     follow_frequency: float = 20.0
+    enable_depth: bool = True
 
 
 def _create_router(global_config: GlobalConfig) -> PatrolRouter:
@@ -159,7 +159,6 @@ class SecurityModule(Module[SecurityModuleConfig]):
         self._detector = YoloPersonDetector()
         self._tracker = EdgeTAMProcessor()
 
-        # self._depth_estimator = DepthEstimator(self.depth_image.publish)
         self._depth_estimator = None
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
@@ -180,14 +179,14 @@ class SecurityModule(Module[SecurityModuleConfig]):
         self._disposables.add(Disposable(self.goal_reached.subscribe(self._on_goal_reached)))
         self._disposables.add(Disposable(self.color_image.subscribe(self._on_color_image)))
 
-        if self._depth_estimator is not None:
-            self._depth_estimator.start()
+        if self.config.enable_depth:
+            logger.info("Loading depth model…")
+            self._depth_estimator = load_depth_model()
+            logger.info("Depth model ready")
 
     @rpc
     def stop(self) -> None:
         self._stop_security_patrol_internal()
-        if self._depth_estimator is not None:
-            self._depth_estimator.stop()
         self._detector.stop()
         self._tracker.stop()
         super().stop()
@@ -239,8 +238,20 @@ class SecurityModule(Module[SecurityModuleConfig]):
     def _on_color_image(self, image: Image) -> None:
         with self._lock:
             self._latest_image = image
+
+        # Always publish to tracking_image so the Rerun "Track" panel has a feed.
+        # During FOLLOWING state, _follow_step overwrites with the segmentation overlay.
+        with self._lock:
+            state = self._state
+        if state != "FOLLOWING":
+            self.tracking_image.publish(image)
+
         if self._depth_estimator is not None:
-            self._depth_estimator.submit(image)
+            try:
+                print("publishing depth")
+                self.depth_image.publish(self._depth_estimator.estimate_depth(image))
+            except Exception:
+                logger.exception("Depth estimation failed")
 
     def _main_loop(self) -> None:
         self._transition_to("PATROLLING")

@@ -12,10 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import annotations
+"""Depth estimation for the security demo.
 
-from collections.abc import Callable
-import threading
+MPS is excluded from device selection because ``.to("mps")`` can hang
+indefinitely in forked worker processes, blocking the GIL and starving
+all sibling threads (including the shared-memory fanout thread that
+delivers ``color_image`` callbacks).
+"""
+
+from __future__ import annotations
 
 import numpy as np
 from PIL import Image as PILImage
@@ -23,72 +28,38 @@ import torch
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
 from dimos.msgs.sensor_msgs.Image import Image, ImageFormat
+from dimos.utils.logging_config import setup_logger
 
-_DEPTH_MODEL_NAME = "depth-anything/Depth-Anything-V2-Small-hf"
-_DEPTH_MAX_WIDTH = 640
+logger = setup_logger()
+
+_MODEL_NAME = "depth-anything/Depth-Anything-V2-Small-hf"
+_MAX_WIDTH = 640
 
 
-def _get_torch_device() -> str:
-    """Return the best available torch device: CUDA > MPS > CPU."""
+def _get_device() -> str:
+    """Return the best available torch device: CUDA > CPU."""
     if torch.cuda.is_available():
         return "cuda"
-    if torch.backends.mps.is_available() and torch.backends.mps.is_built():
-        return "mps"
     return "cpu"
 
 
-class DepthEstimator:
-    """Runs depth estimation in a background thread, always processing only the latest image."""
+class DepthEstimatorSync:
+    """Synchronous depth estimator. No threads — call :meth:`estimate_depth` directly."""
 
-    def __init__(self, publish: Callable[[Image], None], device: str | None = None) -> None:
-        self._publish = publish
-        self._processor: AutoImageProcessor | None = None
+    def __init__(self, processor: AutoImageProcessor, model: AutoModelForDepthEstimation, device: str) -> None:
+        self._processor = processor
+        self._model = model
         self._device = device
-        self._model: AutoModelForDepthEstimation | None = None
-        self._latest: Image | None = None
-        self._event = threading.Event()
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
 
-    def start(self) -> None:
-        self._device = self._device or torch.device(_get_torch_device())
-        self._processor = AutoImageProcessor.from_pretrained(_DEPTH_MODEL_NAME)
-        self._model = AutoModelForDepthEstimation.from_pretrained(_DEPTH_MODEL_NAME).to(self._device)
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, daemon=True, name="DepthEstimator")
-        self._thread.start()
-
-    def stop(self) -> None:
-        self._stop.set()
-        self._event.set()
-        if self._thread is not None:
-            self._thread.join(timeout=5.0)
-            self._thread = None
-
-    def submit(self, image: Image) -> None:
-        """Submit a new image; any unprocessed previous image is discarded."""
-        self._latest = image
-        self._event.set()
-
-    def _loop(self) -> None:
-        while not self._stop.is_set():
-            self._event.wait()
-            self._event.clear()
-            if self._stop.is_set():
-                break
-            image = self._latest
-            if image is not None:
-                self._process(image)
-
-    def _process(self, image: Image) -> None:
+    def estimate_depth(self, image: Image) -> Image:
         rgb = image.to_rgb()
         pil_image = PILImage.fromarray(rgb.data)
-        if pil_image.width > _DEPTH_MAX_WIDTH:
-            scale = _DEPTH_MAX_WIDTH / pil_image.width
+        if pil_image.width > _MAX_WIDTH:
+            scale = _MAX_WIDTH / pil_image.width
             new_h = int(pil_image.height * scale)
-            pil_image = pil_image.resize((_DEPTH_MAX_WIDTH, new_h), PILImage.Resampling.BILINEAR)
-        inputs = self._processor(images=pil_image, return_tensors="pt").to(self._device)
+            pil_image = pil_image.resize((_MAX_WIDTH, new_h), PILImage.Resampling.BILINEAR)
 
+        inputs = self._processor(images=pil_image, return_tensors="pt").to(self._device)
         with torch.no_grad():
             outputs = self._model(**inputs)
 
@@ -100,8 +71,14 @@ class DepthEstimator:
         ).squeeze()
 
         depth_np = depth.cpu().numpy().astype(np.float32)
-        self._publish(
-            Image.from_numpy(
-                depth_np, format=ImageFormat.DEPTH, frame_id=image.frame_id, ts=image.ts
-            )
-        )
+        return Image.from_numpy(depth_np, format=ImageFormat.DEPTH, frame_id=image.frame_id, ts=image.ts)
+
+
+def load_depth_model(device: str | None = None) -> DepthEstimator:
+    """Load the depth model and return a ready-to-use estimator."""
+    device = device or _get_device()
+    logger.info("Loading depth model", model=_MODEL_NAME, device=device)
+    processor = AutoImageProcessor.from_pretrained(_MODEL_NAME)
+    model = AutoModelForDepthEstimation.from_pretrained(_MODEL_NAME).to(device)
+    logger.info("Depth model loaded")
+    return DepthEstimatorSync(processor, model, device)

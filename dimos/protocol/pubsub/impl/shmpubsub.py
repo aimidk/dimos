@@ -248,49 +248,52 @@ class SharedMemoryPubSubBase(PubSub[str, Any]):
             return st
 
     def _fanout_loop(self, topic: str, st: _TopicState) -> None:
-        while not st.stop.is_set():
-            seq, _ts_ns, view = st.channel.read(last_seq=st.last_seq, require_new=True)
-            if view is None:
-                time.sleep(0.001)
-                continue
-            st.last_seq = seq
-
-            host = np.array(view, copy=True)
-
-            try:
-                # Read header: length(4) + uuid(16)
-                L = struct.unpack("<I", host[:4].tobytes())[0]
-
-                if L < 16 or L > st.capacity + 16:
+        try:
+            while not st.stop.is_set():
+                seq, _ts_ns, view = st.channel.read(last_seq=st.last_seq, require_new=True)
+                if view is None:
+                    time.sleep(0.001)
                     continue
+                st.last_seq = seq
 
-                # Extract UUID
-                message_id = host[4:20].tobytes()
+                host = np.array(view, copy=True)
 
-                # Extract actual payload (after removing the 16 bytes for uuid)
-                payload_len = L - 16
-                if payload_len > 0:
-                    payload = host[20 : 20 + payload_len].tobytes()
-                else:
-                    continue
-
-                # Drop exactly the number of local echoes we created
-                cnt = st.suppress_counts.get(message_id, 0)
-                if cnt > 0:
-                    if cnt == 1:
-                        del st.suppress_counts[message_id]
-                    else:
-                        st.suppress_counts[message_id] = cnt - 1
-                    continue  # suppressed
-
-            except Exception:
-                continue
-
-            for cb in list(st.subs):
                 try:
-                    cb(payload, topic)
+                    # Read header: length(4) + uuid(16)
+                    L = struct.unpack("<I", host[:4].tobytes())[0]
+
+                    if L < 16 or L > st.capacity + 16:
+                        continue
+
+                    # Extract UUID
+                    message_id = host[4:20].tobytes()
+
+                    # Extract actual payload (after removing the 16 bytes for uuid)
+                    payload_len = L - 16
+                    if payload_len > 0:
+                        payload = host[20 : 20 + payload_len].tobytes()
+                    else:
+                        continue
+
+                    # Drop exactly the number of local echoes we created
+                    cnt = st.suppress_counts.get(message_id, 0)
+                    if cnt > 0:
+                        if cnt == 1:
+                            del st.suppress_counts[message_id]
+                        else:
+                            st.suppress_counts[message_id] = cnt - 1
+                        continue  # suppressed
+
                 except Exception:
-                    pass
+                    continue
+
+                for cb in list(st.subs):
+                    try:
+                        cb(payload, topic)
+                    except Exception:
+                        pass
+        except Exception:
+            logger.exception(f"SHM fanout loop crashed for {topic}")
 
 
 BytesSharedMemory = SharedMemoryPubSubBase
