@@ -33,7 +33,7 @@ from typing import Any
 
 from dimos.core.blueprints import autoconnect
 from dimos.core.global_config import global_config
-from dimos.navigation.smartnav.blueprints._rerun_helpers import (
+from dimos.navigation.smart_nav.blueprints._rerun_helpers import (
     path_override,
     sensor_scan_override,
     static_floor,
@@ -42,16 +42,16 @@ from dimos.navigation.smartnav.blueprints._rerun_helpers import (
     terrain_map_override,
     waypoint_override,
 )
-from dimos.navigation.smartnav.modules.cmd_vel_mux import CmdVelMux
-from dimos.navigation.smartnav.modules.local_planner.local_planner import LocalPlanner
-from dimos.navigation.smartnav.modules.path_follower.path_follower import PathFollower
-from dimos.navigation.smartnav.modules.pgo.pgo import PGO
-from dimos.navigation.smartnav.modules.sensor_scan_generation.sensor_scan_generation import (
+from dimos.navigation.smart_nav.modules.cmd_vel_mux import CmdVelMux
+from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
+from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
+from dimos.navigation.smart_nav.modules.pgo.pgo import PGO
+from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
     SensorScanGeneration,
 )
-from dimos.navigation.smartnav.modules.tare_planner.tare_planner import TarePlanner
-from dimos.navigation.smartnav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
-from dimos.navigation.smartnav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
+from dimos.navigation.smart_nav.modules.tare_planner.tare_planner import TarePlanner
+from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
+from dimos.navigation.smart_nav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
 from dimos.simulation.unity.module import UnityBridgeModule
 from dimos.visualization.vis_module import vis_module

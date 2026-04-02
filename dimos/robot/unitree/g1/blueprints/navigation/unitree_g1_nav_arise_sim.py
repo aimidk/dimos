@@ -38,7 +38,7 @@ from typing import Any
 
 from dimos.core.blueprints import autoconnect
 from dimos.core.global_config import global_config
-from dimos.navigation.smartnav.blueprints._rerun_helpers import (
+from dimos.navigation.smart_nav.blueprints._rerun_helpers import (
     goal_path_override,
     path_override,
     static_floor,
@@ -47,14 +47,14 @@ from dimos.navigation.smartnav.blueprints._rerun_helpers import (
     terrain_map_override,
     waypoint_override,
 )
-from dimos.navigation.smartnav.modules.arise_sim_adapter import AriseSimAdapter
-from dimos.navigation.smartnav.modules.arise_slam.arise_slam import AriseSLAM
-from dimos.navigation.smartnav.modules.click_to_goal.click_to_goal import ClickToGoal
-from dimos.navigation.smartnav.modules.cmd_vel_mux import CmdVelMux
-from dimos.navigation.smartnav.modules.local_planner.local_planner import LocalPlanner
-from dimos.navigation.smartnav.modules.path_follower.path_follower import PathFollower
-from dimos.navigation.smartnav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
-from dimos.navigation.smartnav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
+from dimos.navigation.smart_nav.modules.arise_sim_adapter import AriseSimAdapter
+from dimos.navigation.smart_nav.modules.arise_slam.arise_slam import AriseSLAM
+from dimos.navigation.smart_nav.modules.click_to_goal.click_to_goal import ClickToGoal
+from dimos.navigation.smart_nav.modules.cmd_vel_mux import CmdVelMux
+from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
+from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
+from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
+from dimos.navigation.smart_nav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
 from dimos.simulation.unity.module import UnityBridgeModule
 from dimos.visualization.vis_module import vis_module

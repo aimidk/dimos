@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# Copyright 2025-2026 Dimensional Inc.
+# Copyright 2026 Dimensional Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,25 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""G1 with TARE autonomous exploration on real hardware.
+"""Simulation + TARE exploration planner blueprint.
 
-Zero-ROS navigation stack: TARE frontier-based exploration drives the robot
-autonomously through the environment without a user-specified goal. ClickToGoal
-is present for visualization but its waypoint output is disconnected so TARE
-has exclusive control of LocalPlanner's waypoint input.
-
-Data flow:
-    FastLio2 → registered_scan + odometry
-    TarePlanner → way_point → LocalPlanner → PathFollower → G1HighLevelDdsSdk
+Usage:
+    python -m smart_nav.blueprints.simulation_explore                    # default scene
+    python -m smart_nav.blueprints.simulation_explore home_building_1    # specific scene
 """
 
 from __future__ import annotations
 
-import os
+import sys
 from typing import Any
 
 from dimos.core.blueprints import autoconnect
-from dimos.hardware.sensors.lidar.fastlio2.module import FastLio2
+from dimos.core.global_config import global_config
 from dimos.navigation.smart_nav.blueprints._rerun_helpers import (
     global_map_override,
     goal_path_override,
@@ -54,26 +48,30 @@ from dimos.navigation.smart_nav.modules.tare_planner.tare_planner import TarePla
 from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
 from dimos.navigation.smart_nav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
-from dimos.robot.unitree.g1.config import G1
-from dimos.robot.unitree.g1.effectors.high_level.dds_sdk import G1HighLevelDdsSdk
-from dimos.visualization.rerun.bridge import RerunBridgeModule, _resolve_viewer_mode
+from dimos.simulation.unity.module import UnityBridgeModule
+from dimos.visualization.vis_module import vis_module
 
 
 def _rerun_blueprint() -> Any:
     import rerun.blueprint as rrb
 
     return rrb.Blueprint(
-        rrb.Spatial3DView(origin="world", name="3D"),
+        rrb.Vertical(
+            rrb.Spatial3DView(origin="world", name="3D"),
+            rrb.Spatial2DView(origin="world/color_image", name="Camera"),
+            row_shares=[2, 1],
+        ),
     )
 
 
-_rerun_config = {
+rerun_config = {
     "blueprint": _rerun_blueprint,
     "pubsubs": [LCM()],
     "min_interval_sec": 0.25,
     "visual_override": {
-        "world/sensor_scan": sensor_scan_override,
+        "world/camera_info": UnityBridgeModule.rerun_suppress_camera_info,
         "world/terrain_map": terrain_map_override,
+        "world/sensor_scan": sensor_scan_override,
         "world/terrain_map_ext": terrain_map_ext_override,
         "world/global_map": global_map_override,
         "world/path": path_override,
@@ -81,65 +79,58 @@ _rerun_config = {
         "world/goal_path": goal_path_override,
     },
     "static": {
+        "world/color_image": UnityBridgeModule.rerun_static_pinhole,
         "world/floor": static_floor,
         "world/tf/robot": static_robot,
     },
 }
 
-unitree_g1_nav_explore_onboard = (
-    autoconnect(
-        FastLio2.blueprint(
-            host_ip=os.getenv("LIDAR_HOST_IP", "192.168.123.164"),
-            lidar_ip=os.getenv("LIDAR_IP", "192.168.123.120"),
-            mount=G1.internal_odom_offsets["mid360_link"],
-            map_freq=0.0,  # GlobalMap handles accumulation
+
+def make_explore_blueprint(scene: str = "home_building_1"):
+    """Create an exploration blueprint with the given Unity scene."""
+    return autoconnect(
+        UnityBridgeModule.blueprint(
+            unity_binary="",
+            unity_scene=scene,
         ),
         SensorScanGeneration.blueprint(),
-        TerrainAnalysis.blueprint(
-            obstacle_height_thre=0.2,
-            max_rel_z=1.5,
-            vehicle_height=G1.height_clearance,
-        ),
+        TerrainAnalysis.blueprint(obstacle_height_thre=0.2, max_rel_z=1.5),
         TerrainMapExt.blueprint(),
-        TarePlanner.blueprint(),
         LocalPlanner.blueprint(
             autonomy_mode=True,
-            max_speed=1.0,
-            autonomy_speed=1.0,
+            max_speed=2.0,
+            autonomy_speed=2.0,
             obstacle_height_thre=0.2,
             max_rel_z=1.5,
-            min_rel_z=-1.5,
+            min_rel_z=-1.0,
         ),
         PathFollower.blueprint(
             autonomy_mode=True,
-            max_speed=1.0,
-            autonomy_speed=1.0,
-            max_accel=2.0,
+            max_speed=2.0,
+            autonomy_speed=2.0,
+            max_accel=4.0,
             slow_dwn_dis_thre=0.2,
         ),
+        TarePlanner.blueprint(),
         ClickToGoal.blueprint(),
         GlobalMap.blueprint(),
-        G1HighLevelDdsSdk.blueprint(),
-        RerunBridgeModule.blueprint(viewer_mode=_resolve_viewer_mode(), **_rerun_config),
-    )
-    .remappings(
+        vis_module(viewer_backend=global_config.viewer, rerun_config=rerun_config),
+    ).remappings(
         [
-            # FastLio2 outputs "lidar"; SmartNav modules expect "registered_scan"
-            (FastLio2, "lidar", "registered_scan"),
-            # TarePlanner drives way_point to LocalPlanner.
+            # In explore mode, only TarePlanner should drive way_point to LocalPlanner.
             # Disconnect ClickToGoal's way_point so it doesn't conflict.
             (ClickToGoal, "way_point", "_click_way_point_unused"),
         ]
     )
-    .global_config(n_workers=8, robot_model="unitree_g1")
-)
+
+
+simulation_explore_blueprint = make_explore_blueprint()
 
 
 def main() -> None:
-    unitree_g1_nav_explore_onboard.build().loop()
+    scene = sys.argv[1] if len(sys.argv) > 1 else "home_building_1"
+    make_explore_blueprint(scene).build({"n_workers": 9}).loop()
 
-
-__all__ = ["unitree_g1_nav_explore_onboard"]
 
 if __name__ == "__main__":
     main()

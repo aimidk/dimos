@@ -45,7 +45,7 @@ from typing import Any
 
 from dimos.core.blueprints import autoconnect
 from dimos.hardware.sensors.lidar.fastlio2.module import FastLio2
-from dimos.navigation.smartnav.blueprints._rerun_helpers import (
+from dimos.navigation.smart_nav.blueprints._rerun_helpers import (
     goal_path_override,
     path_override,
     sensor_scan_override,
@@ -55,14 +55,14 @@ from dimos.navigation.smartnav.blueprints._rerun_helpers import (
     terrain_map_override,
     waypoint_override,
 )
-from dimos.navigation.smartnav.modules.click_to_goal.click_to_goal import ClickToGoal
-from dimos.navigation.smartnav.modules.cmd_vel_mux import CmdVelMux
-from dimos.navigation.smartnav.modules.far_planner.far_planner import FarPlanner
-from dimos.navigation.smartnav.modules.local_planner.local_planner import LocalPlanner
-from dimos.navigation.smartnav.modules.path_follower.path_follower import PathFollower
-from dimos.navigation.smartnav.modules.pgo.pgo import PGO
-from dimos.navigation.smartnav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
-from dimos.navigation.smartnav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
+from dimos.navigation.smart_nav.modules.click_to_goal.click_to_goal import ClickToGoal
+from dimos.navigation.smart_nav.modules.cmd_vel_mux import CmdVelMux
+from dimos.navigation.smart_nav.modules.far_planner.far_planner import FarPlanner
+from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
+from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
+from dimos.navigation.smart_nav.modules.pgo.pgo import PGO
+from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
+from dimos.navigation.smart_nav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
 from dimos.robot.unitree.g1.config import G1
 from dimos.robot.unitree.g1.effectors.high_level.dds_sdk import G1HighLevelDdsSdk
