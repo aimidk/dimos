@@ -14,6 +14,8 @@ from dimos.memory2.vis.type import Point
 
 </details>
 
+
+
 we init our recording, investigate available streams
 
 ```python session=mem
@@ -43,6 +45,8 @@ drawing.add(store.streams.color_image)
 drawing.to_svg("assets/color_image.svg")
 ```
 
+
+
 our drawing system applies turbo color scheme to timestamps by default
 
 ![output](assets/color_image.svg)
@@ -64,6 +68,8 @@ drawing.add(
 drawing.to_svg("assets/speed.svg")
 ```
 
+
+
 ![output](assets/speed.svg)
 
 we can do all kinds of things with this, for example map out room lighting
@@ -83,6 +89,8 @@ drawing.add(
 
 drawing.to_svg("assets/brightness.svg")
 ```
+
+
 
 ![output](assets/brightness.svg)
 
@@ -131,6 +139,7 @@ drawing.add(store.streams.color_image_embedded.search(search_vector))
 drawing.to_svg("assets/embedding.svg")
 ```
 
+
 ![output](assets/embedding.svg)
 
 We don't really have to deal with the whole global map actually, let's get top 10 embeddings, and render only lidar around those.
@@ -141,7 +150,7 @@ from dimos.mapping.voxels import VoxelMapTransformer
 drawing = Drawing()
 
 # this is defined here, but not executed
-matches = store.streams.color_image_embedded.search(search_vector, k=50)
+matches = store.streams.color_image_embedded.search(search_vector, k=30)
 
 print(matches) # Stream("color_image_embedded") | vector_search(k=50)
 
@@ -159,8 +168,50 @@ drawing.to_svg("assets/embedding_focused.svg")
 
 <!--Result:-->
 ```
-Stream("color_image_embedded") | vector_search(k=50)
-16:11:43.138 [inf][dimos/mapping/voxels.py       ] VoxelGrid using device: CUDA:0
+Stream("color_image_embedded") | vector_search(k=30)
+16:21:21.162 [inf][dimos/mapping/voxels.py       ] VoxelGrid using device: CUDA:0
 ```
 
 ![output](assets/embedding_focused.svg)
+
+<details><summary>Python</summary>
+
+```python fold session=mem
+import matplotlib
+import matplotlib.pyplot as plt
+import math
+
+def plot_mosaic(frames, path, cols=5):
+    matplotlib.use("Agg")
+    rows = math.ceil(len(frames) / cols)
+    aspect = frames[0].width / frames[0].height
+    fig_w, fig_h = 12, 12 * rows / (cols * aspect)
+
+    fig, axes = plt.subplots(rows, cols, figsize=(fig_w, fig_h))
+    fig.patch.set_facecolor("black")
+    for i, ax in enumerate(axes.flat):
+        if i < len(frames):
+            ax.imshow(frames[i].data)
+            for spine in ax.spines.values():
+                spine.set_color("black")
+                spine.set_linewidth(0)
+            ax.set_xticks([])
+            ax.set_yticks([])
+        else:
+            ax.axis("off")
+    plt.subplots_adjust(wspace=0.02, hspace=0.02, left=0, right=1, top=1, bottom=0)
+    plt.savefig(path, facecolor="black", dpi=100, bbox_inches="tight", pad_inches=0)
+    plt.close()
+
+```
+
+</details>
+
+let's view those images
+
+```python session=mem
+plot_mosaic(matches.map(lambda obs: obs.data).to_list(), "assets/grid.png")
+```
+
+
+![output](assets/grid.png)
