@@ -1,10 +1,10 @@
 {
-  "phase": "p3→p1 fix - final approach",
-  "status": "working",
+  "phase": "testing complete",
+  "status": "done",
   "p0_time": 1.2,
   "p1_reached": true,
   "p2_reached": true,
   "p3_reached": true,
-  "p3_to_p1_passed": false,
-  "notes": "p0-p3 all pass. p3→p1: robot routes correctly through doorway but stops 1m from goal (furniture). Need to increase wait times and ensure robot reaches p3 before sending p1. Also need to check goal_reached_threshold."
+  "p3_to_p1_passed": true,
+  "notes": "All tests pass. p0: 1.2s (target 7s). p1: 10s. p2: 5.7s. p3: 4.9s. p3→p1: 30.3s, robot routes through doorway NOT wall. Movement is smooth, forward-facing, no backward driving."
 }
