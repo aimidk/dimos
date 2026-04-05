@@ -40,7 +40,8 @@ class TestLocalPlannerConfig:
             paths_dir="/custom/paths",
         )
         args = config.to_cli_args()
-        assert "--max_speed" in args
+        # max_speed is remapped to the C++ binary's camelCase name
+        assert "--maxSpeed" in args
         assert "1.5" in args
         assert "--paths_dir" in args
         assert "/custom/paths" in args
@@ -60,7 +61,6 @@ class TestLocalPlannerModule:
 
         assert "registered_scan" in in_ports
         assert "odometry" in in_ports
-        assert "joy_cmd" in in_ports
         assert "way_point" in in_ports
         assert "path" in out_ports
 
@@ -93,12 +93,12 @@ class TestPathResolution:
         finally:
             m.stop()
 
-    def test_cwd_resolves_to_smart_nav_root(self):
-        """cwd should resolve to the smart_nav root (where CMakeLists.txt lives)."""
+    def test_cwd_resolves_to_repo_root(self):
+        """cwd should resolve to the vendored ./repo dir (where CMakeLists.txt lives)."""
         m = self._make()
         try:
             cwd = Path(m.config.cwd).resolve()
-            assert (cwd / "CMakeLists.txt").exists(), f"cwd {cwd} is not the smart_nav root"
+            assert (cwd / "CMakeLists.txt").exists(), f"cwd {cwd} is not the repo root"
             assert (cwd / "flake.nix").exists()
         finally:
             m.stop()

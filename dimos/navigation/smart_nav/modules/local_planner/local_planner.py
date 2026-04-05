@@ -20,7 +20,7 @@ evaluation to select collision-free paths toward goals.
 
 from __future__ import annotations
 
-from pathlib import Path as _FsPath
+from pathlib import Path
 from typing import Any
 
 from dimos.core.native_module import NativeModule, NativeModuleConfig
@@ -28,7 +28,7 @@ from dimos.core.stream import In, Out
 from dimos.msgs.geometry_msgs.PointStamped import PointStamped
 from dimos.msgs.geometry_msgs.Twist import Twist
 from dimos.msgs.nav_msgs.Odometry import Odometry
-from dimos.msgs.nav_msgs.Path import Path
+from dimos.msgs.nav_msgs.Path import Path as NavPath
 from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
 from dimos.utils.data import get_data
 
@@ -44,16 +44,11 @@ class LocalPlannerConfig(NativeModuleConfig):
     Fields with ``None`` default are omitted from the CLI.
     """
 
-    cwd: str | None = str(_FsPath(__file__).resolve().parent)
+    # Build from the vendored local source in ./repo so we can patch the C++.
+    cwd: str | None = str(Path(__file__).resolve().parent / "repo")
     executable: str = "result/bin/local_planner"
-    build_command: str | None = "nix build ./repo --no-write-lock-file"
-    rebuild_on_change: list[str] | None = [  # type: ignore[assignment]
-        "repo/main.cpp",
-    ]
-    # TODO: remove below after finish testing
-    # build_command: str | None = (
-    #     "nix build github:dimensionalOS/dimos-module-local-planner/v0.1.1 --no-write-lock-file"
-    # )
+    build_command: str | None = "nix build --no-write-lock-file"
+    rebuild_on_change: list[str] = ["main.cpp"]  # type: ignore[assignment]
 
     # C++ binary uses camelCase CLI args (except paths_dir).
     cli_name_override: dict[str, str] = {
@@ -141,7 +136,7 @@ class LocalPlanner(NativeModule):
             (intensity = obstacle height). Used when useTerrainAnalysis is enabled.
         joy_cmd (In[Twist]): Joystick/teleop velocity commands.
         way_point (In[PointStamped]): Navigation goal waypoint.
-        path (Out[Path]): Selected local path for path follower.
+        path (Out[NavPath]): Selected local path for path follower.
         obstacle_cloud (Out[PointCloud2]): Vehicle-frame crop of the planner's
             obstacle cloud (intensity = height above ground). Published at
             ~5 Hz for debugging/visualization of what the planner is actually
@@ -155,5 +150,5 @@ class LocalPlanner(NativeModule):
     terrain_map: In[PointCloud2]
     joy_cmd: In[Twist]
     way_point: In[PointStamped]
-    path: Out[Path]
+    path: Out[NavPath]
     obstacle_cloud: Out[PointCloud2]

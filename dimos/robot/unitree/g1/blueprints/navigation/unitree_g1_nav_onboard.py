@@ -66,6 +66,11 @@ unitree_g1_nav_onboard = (
         smart_nav(
             vehicle_height=G1.height_clearance,
             far_planner={"sensor_range": 30.0, "visibility_range": 25.0},
+            # G1 is a biped — disable sideways (linear.y) strafe near the waypoint.
+            # With the smart_nav default of 0.5m, PathFollower emits lateral
+            # velocity once inside that radius, which the G1 can't execute well
+            # and manifests as jitter as waypoints advance along the FAR route.
+            path_follower={"omni_dir_goal_threshold": 0.0},
         ),
         G1HighLevelDdsSdk.blueprint(),
         RerunBridgeModule.blueprint(
@@ -84,7 +89,6 @@ unitree_g1_nav_onboard = (
             # FastLio2 outputs "lidar"; SmartNav modules expect "registered_scan"
             (FastLio2, "lidar", "registered_scan"),
             (FastLio2, "global_map", "global_map_fastlio"),
-            (PGO, "global_map", "global_map_pgo"),
         ]
     )
     .global_config(n_workers=12, robot_model="unitree_g1")

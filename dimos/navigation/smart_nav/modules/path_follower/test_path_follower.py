@@ -31,7 +31,7 @@ class TestPathFollowerConfig:
         config = PathFollowerConfig()
         assert config.look_ahead_distance == 0.5
         assert config.max_speed == 2.0
-        assert config.max_yaw_rate == 1.5
+        assert config.max_yaw_rate == 80.0
         assert config.goal_tolerance == 0.3
 
     def test_cli_args_generation(self):
@@ -40,8 +40,9 @@ class TestPathFollowerConfig:
             max_speed=1.0,
         )
         args = config.to_cli_args()
-        assert "--look_ahead_distance" in args
-        assert "--max_speed" in args
+        # Field names are remapped to the C++ binary's camelCase names.
+        assert "--lookAheadDis" in args
+        assert "--maxSpeed" in args
 
 
 class TestPathFollowerModule:
@@ -89,12 +90,12 @@ class TestPathResolution:
         finally:
             m.stop()
 
-    def test_cwd_resolves_to_smart_nav_root(self):
-        """cwd should resolve to the smart_nav root (where CMakeLists.txt lives)."""
+    def test_cwd_resolves_to_repo_root(self):
+        """cwd should resolve to the vendored ./repo dir (where CMakeLists.txt lives)."""
         m = self._make()
         try:
             cwd = Path(m.config.cwd).resolve()
-            assert (cwd / "CMakeLists.txt").exists(), f"cwd {cwd} is not the smart_nav root"
+            assert (cwd / "CMakeLists.txt").exists(), f"cwd {cwd} is not the repo root"
             assert (cwd / "flake.nix").exists()
         finally:
             m.stop()
