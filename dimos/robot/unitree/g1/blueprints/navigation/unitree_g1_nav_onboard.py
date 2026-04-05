@@ -84,7 +84,6 @@ unitree_g1_nav_onboard = (
             # FastLio2 outputs "lidar"; SmartNav modules expect "registered_scan"
             (FastLio2, "lidar", "registered_scan"),
             (FastLio2, "global_map", "global_map_fastlio"),
-            (PGO, "global_map", "global_map_pgo"),
         ]
     )
     .global_config(n_workers=12, robot_model="unitree_g1")
