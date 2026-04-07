@@ -31,8 +31,8 @@ class TestLocalPlannerConfig:
         config = LocalPlannerConfig()
         assert config.max_speed == 2.0
         assert config.autonomy_speed == 1.0
-        assert config.vehicle_config == "omniDir"
         assert config.obstacle_height_threshold == 0.15
+        assert config.goal_clearance == 0.5
 
     def test_cli_args_generation(self):
         config = LocalPlannerConfig(

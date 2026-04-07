@@ -47,26 +47,60 @@ class LocalPlannerConfig(NativeModuleConfig):
     # Build from the vendored local source in ./repo so we can patch the C++.
     cwd: str | None = str(Path(__file__).resolve().parent / "repo")
     executable: str = "result/bin/local_planner"
-    build_command: str | None = "nix build --no-write-lock-file"
+    # build_command: str | None = "nix build --no-write-lock-file"
+    build_command: str | None = (
+        "nix build github:dimensionalOS/dimos-module-local-planner/v0.3.0 --no-write-lock-file"
+    )
     rebuild_on_change: list[str] = ["main.cpp"]  # type: ignore[assignment]
 
-    # C++ binary uses camelCase CLI args (except paths_dir).
+    # C++ binary uses camelCase CLI args.
     cli_name_override: dict[str, str] = {
-        "vehicle_config": "vehicleConfig",
         "max_speed": "maxSpeed",
         "autonomy_speed": "autonomySpeed",
         "autonomy_mode": "autonomyMode",
         "use_terrain_analysis": "useTerrainAnalysis",
         "obstacle_height_threshold": "obstacleHeightThre",
+        "ground_height_threshold": "groundHeightThre",
+        "cost_height_thre1": "costHeightThre1",
+        "cost_height_thre2": "costHeightThre2",
         "max_relative_z": "maxRelZ",
         "min_relative_z": "minRelZ",
         "goal_clearance": "goalClearance",
         "goal_reached_threshold": "goalReachedThreshold",
         "goal_behind_range": "goalBehindRange",
+        "goal_yaw_threshold": "goalYawThreshold",
         "freeze_ang": "freezeAng",
+        "freeze_time": "freezeTime",
         "two_way_drive": "twoWayDrive",
         "goal_x": "goalX",
         "goal_y": "goalY",
+        "vehicle_length": "vehicleLength",
+        "vehicle_width": "vehicleWidth",
+        "sensor_offset_x": "sensorOffsetX",
+        "sensor_offset_y": "sensorOffsetY",
+        "laser_voxel_size": "laserVoxelSize",
+        "terrain_voxel_size": "terrainVoxelSize",
+        "check_obstacle": "checkObstacle",
+        "check_rot_obstacle": "checkRotObstacle",
+        "adjacent_range": "adjacentRange",
+        "use_cost": "useCost",
+        "slow_path_num_thre": "slowPathNumThre",
+        "slow_group_num_thre": "slowGroupNumThre",
+        "point_per_path_thre": "pointPerPathThre",
+        "dir_weight": "dirWeight",
+        "dir_thre": "dirThre",
+        "dir_to_vehicle": "dirToVehicle",
+        "path_scale": "pathScale",
+        "min_path_scale": "minPathScale",
+        "path_scale_step": "pathScaleStep",
+        "path_scale_by_speed": "pathScaleBySpeed",
+        "min_path_range": "minPathRange",
+        "path_range_step": "pathRangeStep",
+        "path_range_by_speed": "pathRangeBySpeed",
+        "path_crop_by_goal": "pathCropByGoal",
+        "joy_to_speed_delay": "joyToSpeedDelay",
+        "joy_to_check_obstacle_delay": "joyToCheckObstacleDelay",
+        "omni_dir_goal_thre": "omniDirGoalThre",
     }
 
     # Path data directory (auto-resolved from LFS)
@@ -77,8 +111,16 @@ class LocalPlannerConfig(NativeModuleConfig):
         if not self.paths_dir:
             self.paths_dir = _default_paths_dir()
 
-    # Vehicle config: "omniDir" for mecanum, "standard" for ackermann.
-    vehicle_config: str = "omniDir"
+    # --- Vehicle geometry ---
+
+    # Vehicle length for collision checking (m).
+    vehicle_length: float | None = None
+    # Vehicle width for collision checking (m).
+    vehicle_width: float | None = None
+    # Sensor X offset from vehicle center (m).
+    sensor_offset_x: float | None = None
+    # Sensor Y offset from vehicle center (m).
+    sensor_offset_y: float | None = None
 
     # --- Speed limits ---
 
@@ -93,15 +135,66 @@ class LocalPlannerConfig(NativeModuleConfig):
     autonomy_mode: bool | None = None
     # Use terrain analysis cost map for obstacle avoidance.
     use_terrain_analysis: bool | None = None
+    # Check obstacles along paths.
+    check_obstacle: bool | None = None
+    # Check rotation obstacles near the vehicle.
+    check_rot_obstacle: bool | None = None
+    # Use terrain cost for path penalty scoring.
+    use_cost: bool | None = None
 
     # --- Obstacle detection ---
 
     # Points higher than this above ground are classified as obstacles (m).
     obstacle_height_threshold: float = 0.15
+    # Ground height threshold for cost computation (m).
+    ground_height_threshold: float | None = None
+    # Upper cost height threshold (m).
+    cost_height_thre1: float | None = None
+    # Lower cost height threshold (m).
+    cost_height_thre2: float | None = None
     # Height-band filter: maximum z relative to robot (m).
     max_relative_z: float | None = None
     # Height-band filter: minimum z relative to robot (m).
     min_relative_z: float | None = None
+    # Maximum range for obstacle consideration (m).
+    adjacent_range: float | None = None
+    # Voxel size for laser cloud downsampling (m).
+    laser_voxel_size: float | None = None
+    # Voxel size for terrain cloud downsampling (m).
+    terrain_voxel_size: float | None = None
+
+    # --- Path evaluation ---
+
+    # Direction weight for path scoring.
+    dir_weight: float | None = None
+    # Direction threshold for candidate filtering (deg).
+    dir_thre: float | None = None
+    # Use direction relative to vehicle instead of goal.
+    dir_to_vehicle: bool | None = None
+    # Path scale factor (shrinks candidate paths).
+    path_scale: float | None = None
+    # Minimum path scale before giving up.
+    min_path_scale: float | None = None
+    # Path scale decrement step.
+    path_scale_step: float | None = None
+    # Scale path range by joystick speed.
+    path_scale_by_speed: bool | None = None
+    # Minimum path range before giving up (m).
+    min_path_range: float | None = None
+    # Path range decrement step (m).
+    path_range_step: float | None = None
+    # Scale path range by joystick speed.
+    path_range_by_speed: bool | None = None
+    # Crop paths by goal distance.
+    path_crop_by_goal: bool | None = None
+    # Min blocked points to mark a path as obstructed.
+    point_per_path_thre: int | None = None
+    # Threshold for slow-down by path count.
+    slow_path_num_thre: int | None = None
+    # Threshold for slow-down by group count.
+    slow_group_num_thre: int | None = None
+    # Omni-directional goal distance threshold (m).
+    omni_dir_goal_thre: float | None = None
 
     # --- Goal parameters ---
 
@@ -111,15 +204,26 @@ class LocalPlannerConfig(NativeModuleConfig):
     goal_reached_threshold: float | None = None
     # When goal is behind the robot and within this range, robot stops (m).
     goal_behind_range: float | None = None
+    # Goal yaw tolerance (rad).
+    goal_yaw_threshold: float | None = None
     # Freeze angle (deg): if goal direction exceeds this, robot freezes for
     # freezeTime.  Set to 180 for omni-dir robots to disable freeze.
     freeze_ang: float | None = None
+    # Freeze duration (s).
+    freeze_time: float | None = None
     # Allow driving in reverse.  False = robot must turn to face goal first.
     two_way_drive: bool | None = None
     # Goal x-coordinate in local frame (m). None = omit from CLI (binary default).
     goal_x: float | None = None
     # Goal y-coordinate in local frame (m). None = omit from CLI (binary default).
     goal_y: float | None = None
+
+    # --- Joystick ---
+
+    # Delay before speed command overrides joystick (s).
+    joy_to_speed_delay: float | None = None
+    # Delay before obstacle check override from autonomy (s).
+    joy_to_check_obstacle_delay: float | None = None
 
 
 class LocalPlanner(NativeModule):
