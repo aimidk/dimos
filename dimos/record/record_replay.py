@@ -296,10 +296,13 @@ class RecordReplay:
 
             self._position = ts - t_min
 
-            # Decode raw bytes -> DimosMsg -> Rerun archetype
             topic = topic_map.get(stream_name)
             if topic is not None and topic.lcm_type is not None:
-                msg = topic.lcm_type.lcm_decode(obs.data)
+                msg = (
+                    obs.data
+                    if not isinstance(obs.data, bytes)
+                    else topic.lcm_type.lcm_decode(obs.data)
+                )
                 if isinstance(msg, RerunConvertible):
                     entity_path = f"world/{stream_name}"
                     rerun_data = msg.to_rerun()
