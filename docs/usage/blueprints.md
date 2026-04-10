@@ -7,7 +7,7 @@ You don't typically want to run a single module, so multiple blueprints are hand
 You create a `Blueprint` from a single module (say `ConnectionModule`) with:
 
 ```python session=blueprint-ex1
-from dimos.core.blueprints import Blueprint
+from dimos.core.coordination.blueprints import Blueprint
 from dimos.core.core import rpc
 from dimos.core.module import Module, ModuleConfig
 
@@ -38,7 +38,7 @@ blueprint = connection('arg1', 'arg2', kwarg='value')
 You can link multiple blueprints together with `autoconnect`:
 
 ```python session=blueprint-ex1
-from dimos.core.blueprints import autoconnect
+from dimos.core.coordination.blueprints import autoconnect
 
 class Config(ModuleConfig):
     arg1: int = 42
@@ -105,7 +105,7 @@ Imagine you have this code:
 ```python session=blueprint-ex1
 from functools import partial
 
-from dimos.core.blueprints import Blueprint, autoconnect
+from dimos.core.coordination.blueprints import Blueprint, autoconnect
 from dimos.core.core import rpc
 from dimos.core.module import Module
 from dimos.core.stream import Out, In
@@ -168,7 +168,7 @@ Note: `expanded_blueprint` does not get the transport overrides because it's cre
 Sometimes you need to rename a connection to match what other modules expect. You can use `remappings` to rename module connections:
 
 ```python session=blueprint-ex2
-from dimos.core.blueprints import autoconnect
+from dimos.core.coordination.blueprints import autoconnect
 from dimos.core.core import rpc
 from dimos.core.module import Module
 from dimos.core.stream import Out, In
@@ -321,6 +321,34 @@ class SomeSkill(Module):
         """Description of the skill for the LLM."""
         return "result"
 ```
+
+## Recording
+
+Blueprints can declare which modules are sensor sources via `default_record_modules`. When `--record-path` is used, only these modules' Out streams are recorded:
+
+```python session=blueprint-ex4
+from dimos.robot.unitree.go2.connection import GO2Connection
+
+unitree_go2 = (
+    autoconnect(with_vis, GO2Connection.blueprint(), WebsocketVisModule.blueprint())
+    .global_config(n_workers=4, robot_model="unitree_go2")
+    .default_record_modules(GO2Connection)
+)
+```
+
+If `default_record_modules` is not set, all modules with Out streams are recorded.
+
+Recording captures decoded message objects directly via `Out.subscribe()` — no transport dependency. Codecs are auto-selected (JPEG for images, LCM for standard messages). Sensor timestamps are preserved from `msg.ts`.
+
+```bash
+# Record sensor outputs
+dimos --record-path recording.db run unitree-go2
+
+# Replay (disables modules whose Outs are in the recording)
+dimos --replay-file recording.db --viewer rerun-web run unitree-go2
+```
+
+During replay, modules whose Out stream names overlap with the recording are disabled. The recorded data is published to LCM at realtime speed, and `rerun-bridge` handles visualization.
 
 ## Building
 
