@@ -63,7 +63,7 @@ class LCMService(Service):
     config: LCMConfig
     l: lcm_mod.LCM | None
     _stop_event: threading.Event
-    _l_lock: threading.Lock
+    _l_lock: threading.RLock
     _thread: threading.Thread | None
     _call_thread_pool: ThreadPoolExecutor | None = None
     _call_thread_pool_lock: threading.RLock = threading.RLock()
@@ -77,7 +77,7 @@ class LCMService(Service):
         else:
             self.l = lcm_mod.LCM(self.config.url) if self.config.url else lcm_mod.LCM()
 
-        self._l_lock = threading.Lock()
+        self._l_lock = threading.RLock()
         self._stop_event = threading.Event()
         self._thread = None
 
@@ -100,7 +100,7 @@ class LCMService(Service):
         self.l = None
         self._stop_event = threading.Event()
         self._thread = None
-        self._l_lock = threading.Lock()
+        self._l_lock = threading.RLock()
         self._call_thread_pool = None
         self._call_thread_pool_lock = threading.RLock()
 
@@ -120,31 +120,44 @@ class LCMService(Service):
                 return
 
             # Reinitialize LCM if it's None (e.g., after unpickling)
-            if self.l is None:
+            l = self.l
+            if l is None:
                 if self.config.lcm:
-                    self.l = self.config.lcm
+                    l = self.config.lcm
                 else:
-                    self.l = lcm_mod.LCM(self.config.url) if self.config.url else lcm_mod.LCM()
+                    l = lcm_mod.LCM(self.config.url) if self.config.url else lcm_mod.LCM()
+                self.l = l
+
+            # Pre-warm LCM recv setup (including the up-to-10s self-test) now,
+            # so _lcm_loop doesn't do it later while holding _l_lock, which
+            # would block external publish/subscribe/unsubscribe calls.
+            try:
+                l.fileno()
+            except Exception as e:
+                logger.warning(f"LCM fileno pre-warm failed: {e}")
 
             self._stop_event.clear()
             self._thread = threading.Thread(target=self._lcm_loop, daemon=True)
             self._thread.start()
 
     def _lcm_loop(self) -> None:
-        """LCM message handling loop."""
+        """LCM message handling loop.
+
+        Holds _l_lock during handle_timeout so that external callers
+        (publish/subscribe/unsubscribe on this LCMService from other threads)
+        are serialized with dispatch. This prevents a data race in the LCM
+        Python binding that segfaults otherwise.
+        """
         try:
             while not self._stop_event.is_set():
                 with self._l_lock:
-                    l = self.l
-                    if l is None:
+                    if self.l is None:
                         break
-                try:
-                    # This doesn't have to be under a lock because the C
-                    # library has its own locking for this.
-                    l.handle_timeout(_LCM_LOOP_TIMEOUT)
-                except Exception as e:
-                    stack_trace = traceback.format_exc()
-                    print(f"Error in LCM handling: {e}\n{stack_trace}")
+                    try:
+                        self.l.handle_timeout(_LCM_LOOP_TIMEOUT)
+                    except Exception as e:
+                        stack_trace = traceback.format_exc()
+                        print(f"Error in LCM handling: {e}\n{stack_trace}")
         finally:
             self._cleanup_owned_lcm()
             with self._l_lock:
