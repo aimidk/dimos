@@ -159,6 +159,11 @@ def fuse_planning_map(
             ts=ts,
         )
 
+    if structural_map.grid.shape != live_map.grid.shape:
+        raise ValueError(
+            f"Grid shapes must match: structural {structural_map.grid.shape} vs live {live_map.grid.shape}"
+        )
+
     fused = overlay_occupied(structural_map, live_map)
     return OccupancyGrid(
         grid=fused.grid,
