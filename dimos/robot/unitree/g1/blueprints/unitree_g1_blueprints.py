@@ -61,7 +61,7 @@ from dimos.robot.unitree.connection.g1 import g1_connection
 from dimos.robot.unitree.connection.g1sim import g1_sim_connection
 from dimos.robot.unitree_webrtc.keyboard_teleop import keyboard_teleop
 from dimos.robot.unitree_webrtc.unitree_g1_skill_container import g1_skills
-from dimos.utils.monitoring import utilization
+from dimos.teleop.keyboard.doom_teleop import doom_teleop
 from dimos.web.websocket_vis.websocket_vis_module import websocket_vis
 
 _basic_no_nav = (
