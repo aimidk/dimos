@@ -43,6 +43,7 @@ class ListObservationStore(ObservationStore[T]):
     - ``0`` — discard immediately (live-only, no history).
     """
 
+    default_config = ListObservationStoreConfig
     config: ListObservationStoreConfig
 
     def __init__(self, **kwargs: Any) -> None:

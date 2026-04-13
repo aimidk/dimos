@@ -33,7 +33,7 @@ class MemoryVectorStore(VectorStore):
     Search computes cosine similarity against all vectors in the stream.
     """
 
-    config: MemoryVectorStoreConfig
+    default_config: type[MemoryVectorStoreConfig] = MemoryVectorStoreConfig
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)

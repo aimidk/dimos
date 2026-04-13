@@ -43,10 +43,10 @@ class RegistryStoreConfig(BaseConfig):
     conn: sqlite3.Connection = Field(exclude=True)
 
 
-class RegistryStore(Configurable):
+class RegistryStore(Configurable[RegistryStoreConfig]):
     """SQLite persistence for stream name -> config JSON."""
 
-    config: RegistryStoreConfig
+    default_config: type[RegistryStoreConfig] = RegistryStoreConfig
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)

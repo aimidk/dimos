@@ -106,7 +106,10 @@ class Detection2DBBox(Detection2D):
         x1, y1, x2, y2 = map(int, self.bbox)
 
         h = hashlib.md5(self.name.encode()).digest()[0]
-        bgr = [int(c) for c in cv2.applyColorMap(np.uint8([[h]]), cv2.COLORMAP_HSV)[0][0]]
+        bgr = [
+            int(c)
+            for c in cv2.applyColorMap(np.array([[h]], dtype=np.uint8), cv2.COLORMAP_HSV)[0][0]
+        ]
 
         thickness = max(1, int(2 * scale))
         cv2.rectangle(img, (x1, y1), (x2, y2), bgr, thickness)

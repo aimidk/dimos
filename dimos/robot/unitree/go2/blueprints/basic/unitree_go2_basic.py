@@ -19,8 +19,9 @@ from typing import Any
 
 from dimos.constants import DEFAULT_CAPACITY_COLOR_IMAGE
 from dimos.core.coordination.blueprints import autoconnect
+from dimos.core.core import rpc
 from dimos.core.global_config import global_config
-from dimos.core.module import In
+from dimos.core.stream import In
 from dimos.core.transport import pSHMTransport
 from dimos.memory2.module import Recorder
 from dimos.msgs.sensor_msgs.Image import Image
@@ -146,6 +147,14 @@ else:
 class Go2Recorder(Recorder):
     color_image: In[Image]
     lidar: In[PointCloud2]
+
+    @rpc
+    def start(self) -> None:
+        super().start()
+
+    @rpc
+    def stop(self) -> None:
+        super().stop()
 
 
 unitree_go2_basic = (

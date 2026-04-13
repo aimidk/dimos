@@ -47,7 +47,7 @@ def session() -> Iterator[SqliteStore]:
 class PoseIndex:
     """Preloaded odom data with O(log n) closest-timestamp lookup."""
 
-    def __init__(self, replay: TimedSensorReplay) -> None:
+    def __init__(self, replay: TimedSensorReplay) -> None:  # type: ignore[type-arg]
         self._timestamps: list[float] = []
         self._data: list[Any] = []
         for ts, data in replay.iterate_ts():
@@ -90,7 +90,7 @@ class TestImportReplay:
     def test_import_video(
         self,
         session: SqliteStore,
-        video_replay: TimedSensorReplay,
+        video_replay: TimedSensorReplay,  # type: ignore[type-arg]
         odom_index: PoseIndex,
     ) -> None:
         with session.stream("color_image", Image) as video:
@@ -108,7 +108,7 @@ class TestImportReplay:
     def test_import_lidar(
         self,
         session: SqliteStore,
-        lidar_replay: TimedSensorReplay,
+        lidar_replay: TimedSensorReplay,  # type: ignore[type-arg]
         odom_index: PoseIndex,
     ) -> None:
         # can also be explicit here

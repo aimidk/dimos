@@ -44,7 +44,8 @@ class StreamModule(Module):
 
     **Config-driven pipeline**
 
-        class VoxelGridMapper(StreamModule[VoxelGridMapperConfig]):
+        class VoxelGridMapper(StreamModule):
+            config: VoxelGridMapperConfig
             def pipeline(self, stream: Stream) -> Stream:
                 return stream.transform(VoxelMap(**self.config.model_dump()))
 
@@ -176,7 +177,7 @@ class Recorder(Module):
         for name, port in self.inputs.items():
             stream: Stream[Any] = self._store.stream(name, port.type)
             self.register_disposable(
-                Disposable(port.subscribe(lambda msg, s=stream: s.append(msg)))
+                Disposable(port.subscribe(lambda msg, s=stream: s.append(msg)))  # type: ignore[misc]
             )
             logger.info("Recording %s (%s)", name, port.type.__name__)
 
