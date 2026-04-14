@@ -22,7 +22,6 @@ from pydantic import Field
 from reactivex import operators as ops
 from reactivex.disposable import Disposable
 from reactivex.observable import Observable
-import rerun.blueprint as rrb
 
 from dimos.agents.annotation import skill
 from dimos.constants import DEFAULT_THREAD_JOIN_TIMEOUT
@@ -172,6 +171,11 @@ class ReplayConnection(UnitreeWebRTCConnection):
     # we don't have raw video stream in the data set
     @simple_mcache
     def video_stream(self):  # type: ignore[no-untyped-def]
+        import os as _os
+        if _os.environ.get("DIMOS_SKIP_VIDEO_AUTOCAST") == "1":
+            video_store = TimedSensorReplay(f"{self.dir_name}/video")  # type: ignore[var-annotated]
+            return video_store.stream(**self.replay_config)
+
         # Legacy Unitree recordings can have RGB bytes that were tagged/assumed as BGR.
         # Fix at replay-time by coercing everything to RGB before publishing/logging.
         def _autocast_video(x):  # type: ignore[no-untyped-def]
@@ -218,6 +222,7 @@ class GO2Connection(Module, Camera, Pointcloud):
     @classmethod
     def rerun_views(cls):  # type: ignore[no-untyped-def]
         """Return Rerun view blueprints for GO2 camera visualization."""
+        import rerun.blueprint as rrb
         return [
             rrb.Spatial2DView(
                 name="Camera",
