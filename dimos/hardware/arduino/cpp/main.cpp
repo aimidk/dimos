@@ -98,7 +98,15 @@ static Bridge *g_bridge = nullptr;
  * CLI Parsing
  * ====================================================================== */
 
-/* Returns the termios speed constant for `baud`, or -1 if unsupported. */
+/* Returns the termios speed constant for `baud`, or B0 with *ok=false on
+ * unsupported rates.
+ *
+ * Darwin's <termios.h> only defines POSIX-standard constants up to
+ * B230400; B460800 / B500000 / B576000 / B921600 / B1000000 are
+ * Linux-specific extensions.  We gate them behind `__linux__` so the
+ * bridge builds cleanly on macOS — useful for the virtual-Arduino
+ * path where the bridge talks to a QEMU PTY and any baud rate is
+ * effectively a no-op anyway. */
 static speed_t baud_to_speed(int baud, bool *ok)
 {
     *ok = true;
@@ -109,11 +117,13 @@ static speed_t baud_to_speed(int baud, bool *ok)
         case 57600:   return B57600;
         case 115200:  return B115200;
         case 230400:  return B230400;
+#ifdef __linux__
         case 460800:  return B460800;
         case 500000:  return B500000;
         case 576000:  return B576000;
         case 921600:  return B921600;
         case 1000000: return B1000000;
+#endif
         default:
             *ok = false;
             return B0;
@@ -200,7 +210,7 @@ static void init_hash_registry(Bridge &b)
      * a Python test (`test_arduino_msg_registry_sync`) that fails CI if any
      * of them drift:
      *   - dimos/core/arduino_module.py :: _KNOWN_TYPE_HEADERS
-     *   - dimos/hardware/arduino/common/arduino_msgs/**  (Arduino-side .h)
+     *   - dimos/hardware/arduino/common/arduino_msgs (Arduino-side .h)
      *   - this function (C++ bridge hash registry)
      */
     b.hash_registry["std_msgs.Time"]       = std_msgs::Time::getHash();
@@ -539,7 +549,13 @@ static void lcm_handler_thread(Bridge &b)
     while (b.running.load() && b.serial_connected.load()) {
         int ret = b.lcm->handleTimeout(100);  /* 100ms timeout */
         if (ret < 0) {
-            fprintf(stderr, "[bridge] LCM handle error\n");
+            /* Flag the link down so the reader thread bails and the
+             * reconnect loop rebuilds both threads fresh — otherwise
+             * the bridge ends up half-alive (serial reader still
+             * running, LCM subscriber dead) with data flowing out of
+             * Arduino but nothing flowing in. */
+            fprintf(stderr, "[bridge] LCM handle error — cycling connection\n");
+            b.serial_connected.store(false);
             break;
         }
     }

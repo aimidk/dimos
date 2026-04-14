@@ -8,15 +8,20 @@
       url = "github:dimensionalOS/dimos-lcm/main";
       flake = false;
     };
+    # Patched LCM that builds cleanly on macOS (pkg-config + fdatasync
+    # fixes).  On Linux this is identical to upstream pkgs.lcm.
+    lcm-extended.url = "github:jeff-hykin/lcm_extended";
   };
 
-  outputs = { self, nixpkgs, flake-utils, dimos-lcm }:
+  outputs = { self, nixpkgs, flake-utils, dimos-lcm, lcm-extended }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        # LCM with single output (avoids split-output path issues)
-        lcmFull = pkgs.lcm.overrideAttrs (old: {
+        # Single-output LCM built on top of lcm_extended.
+        # We still collapse outputs to a single `out` so downstream
+        # CMakeLists.txt doesn't have to juggle `lcm` vs `lcm-dev` paths.
+        lcmFull = (lcm-extended.packages.${system}.lcm).overrideAttrs (old: {
           outputs = [ "out" ];
           postInstall = "";
         });
@@ -55,6 +60,11 @@
             pkgs.arduino-cli
             pkgs.avrdude
             pkgs.picocom
+            # qemu-system-avr for virtual-Arduino mode.  `pkgs.qemu` builds
+            # all system targets including avr and works on darwin +
+            # linux; it's ~400MB but cached via the public binary cache
+            # on common platforms so first-time install is the only cost.
+            pkgs.qemu
           ];
         };
       });

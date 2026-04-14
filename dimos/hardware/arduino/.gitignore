@@ -2,8 +2,8 @@
 result
 result-*
 
-# Auto-generated Arduino header (written by ArduinoModule.build())
-examples/*/sketch/dimos_arduino.h
+# Build lock used by ArduinoModule._build_bridge()
+.bridge_build.lock
 
-# Arduino sketch build artifacts
+# Arduino sketch build artifacts (also hosts the generated dimos_arduino.h)
 examples/*/sketch/build/

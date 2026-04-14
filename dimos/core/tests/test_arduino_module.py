@@ -100,7 +100,7 @@ def test_generate_header_escapes_quoted_strings(tmp_path: Path) -> None:
     """A config string containing " or \\ must not produce invalid C."""
     mod = _make_module()
     # Patch _resolve_sketch_dir so the generated header lands in tmp.
-    with mock.patch.object(mod, "_resolve_sketch_dir", return_value=tmp_path):
+    with mock.patch.object(mod, "_build_dir", return_value=tmp_path):
         mod._generate_header()
     text = (tmp_path / "dimos_arduino.h").read_text()
 
@@ -116,7 +116,7 @@ def test_generate_header_includes_topic_enum_and_message_header(
     tmp_path: Path,
 ) -> None:
     mod = _make_module()
-    with mock.patch.object(mod, "_resolve_sketch_dir", return_value=tmp_path):
+    with mock.patch.object(mod, "_build_dir", return_value=tmp_path):
         mod._generate_header()
     text = (tmp_path / "dimos_arduino.h").read_text()
 
@@ -143,7 +143,7 @@ def test_generate_header_rejects_non_finite_float(tmp_path: Path) -> None:
         nan_val: float = float("nan")
 
     mod.config = _NaNConfig()
-    with mock.patch.object(mod, "_resolve_sketch_dir", return_value=tmp_path):
+    with mock.patch.object(mod, "_build_dir", return_value=tmp_path):
         with pytest.raises(ValueError, match="non-finite"):
             mod._generate_header()
 
@@ -154,7 +154,7 @@ def test_generate_header_rejects_unembeddable_type(tmp_path: Path) -> None:
 
     mod = _make_module()
     mod.config = _ListConfig()
-    with mock.patch.object(mod, "_resolve_sketch_dir", return_value=tmp_path):
+    with mock.patch.object(mod, "_build_dir", return_value=tmp_path):
         with pytest.raises(TypeError, match="Cannot embed config field 'the_list'"):
             mod._generate_header()
 

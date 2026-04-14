@@ -31,10 +31,32 @@
  * ====================================================================== */
 
 #define DSP_START_BYTE    0xD1
-#define DSP_MAX_PAYLOAD   1024
 #define DSP_TOPIC_DEBUG   0
 #define DSP_HEADER_SIZE   4   /* START + TOPIC + LENGTH(2) */
 #define DSP_OVERHEAD      5   /* HEADER + CRC8 */
+
+/* Maximum payload size.
+ *
+ * The host-side bridge keeps a generous 1024-byte limit so it can
+ * forward any fixed-size LCM message we support (the biggest is
+ * PoseWithCovariance at 344 bytes, with room to spare for future
+ * types).
+ *
+ * On AVR, `_dsp_rx_buf` is a static buffer sized at this value — so a
+ * 1024-byte default on an Arduino Uno would eat 50% of the chip's 2KB
+ * SRAM before the user's sketch has a chance to allocate anything.
+ * Default to 256 on AVR (enough for any geometry_msg we ship that's
+ * <=256 bytes, which covers every type except PoseWithCovariance and
+ * its friends).  Users who need a larger buffer on a chip with more
+ * SRAM (Mega 2560 has 8KB) can override via
+ * `-DDSP_MAX_PAYLOAD=<bigger>` in their sketch's compile flags. */
+#ifndef DSP_MAX_PAYLOAD
+#  ifdef __AVR__
+#    define DSP_MAX_PAYLOAD   256
+#  else
+#    define DSP_MAX_PAYLOAD   1024
+#  endif
+#endif
 
 /* Maximum number of topic handlers */
 #ifndef DSP_MAX_TOPICS
