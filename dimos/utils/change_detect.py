@@ -27,14 +27,15 @@ Path entries are type-dispatched:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+import contextlib
 import fcntl
 import glob as glob_mod
 import hashlib
 import os
 from pathlib import Path
 import threading
-from typing import Any, Union
+from typing import IO, Any, Union
 
 import xxhash
 
@@ -141,14 +142,50 @@ def _resolve_paths(paths: Sequence[PathEntry], cwd: str | Path | None = None) ->
     return sorted(files)
 
 
-def _hash_files(files: list[Path]) -> str:
-    """Compute an aggregate xxhash digest over the sorted file list."""
+_HASH_CHUNK_SIZE = 1 << 20  # 1 MiB
+
+
+def _hash_files(files: list[Path], *, max_file_size: int | None = None) -> str:
+    """Compute an aggregate xxhash digest over the sorted file list.
+
+    Files are streamed in 1 MiB chunks so large files don't get loaded into
+    memory all at once.  When *max_file_size* is set, any file whose size
+    exceeds the threshold is fingerprinted by ``(size, mtime_ns)`` instead of
+    by content — O(1) regardless of file size, at the cost of missing
+    content changes that don't touch mtime (rare: in-place writes that
+    preserve timestamps, or two different files hitting the same mtime).
+    Good enough for "rebuild when a large dataset is swapped in", not good
+    enough for correctness-critical integrity checking.
+
+    The digest embeds a mode marker per file so that the same file switching
+    between content-mode and stat-mode (e.g. because it grew past the
+    threshold) produces a different aggregate digest.  The threshold itself
+    is also folded into the digest so that two callers using the same
+    ``cache_name`` with different *max_file_size* values can't corrupt each
+    other's cached hash — different thresholds simply produce different
+    cache entries.
+    """
     h = xxhash.xxh64()
+    # Bind the threshold into the digest so it participates in the cache key.
+    h.update(f"max_file_size={max_file_size}".encode())
+    h.update(b"\x00")
     for fpath in files:
         try:
-            # Include the path so additions/deletions/renames are detected
+            st = fpath.stat()
+            # Include the path so additions/deletions/renames are detected.
             h.update(str(fpath).encode())
-            h.update(fpath.read_bytes())
+            if max_file_size is not None and st.st_size > max_file_size:
+                # Fingerprint-only mode: stat fields, no content read.
+                h.update(b"\x00stat\x00")
+                h.update(str(st.st_size).encode())
+                h.update(b"\x00")
+                h.update(str(st.st_mtime_ns).encode())
+                h.update(b"\x00")
+            else:
+                h.update(b"\x00content\x00")
+                with open(fpath, "rb") as f:
+                    while chunk := f.read(_HASH_CHUNK_SIZE):
+                        h.update(chunk)
         except (OSError, PermissionError):
             logger.warning("Cannot read file for hashing", path=str(fpath))
     return h.hexdigest()
@@ -179,6 +216,7 @@ def hash_paths(
     cwd: str | Path | None = None,
     *,
     extra_hash: str | None = None,
+    max_file_size: int | None = None,
 ) -> str | None:
     """Return a stable content hash of *paths*, or ``None`` if nothing resolves.
 
@@ -187,6 +225,12 @@ def hash_paths(
     digest of the sorted file contents.  If *extra_hash* is provided it is
     folded into the final digest, so callers can invalidate on non-file inputs
     (e.g. a build command, a processing version string).
+
+    *max_file_size* (in bytes, default ``None``): files larger than this are
+    fingerprinted by ``(size, mtime_ns)`` instead of full content.  See
+    :func:`_hash_files` for the tradeoff — use it when sources may include
+    the occasional large blob (datasets, binaries) you don't want to stream
+    through xxhash every call.
 
     Use this directly when you want a content-addressed cache key without the
     full :func:`did_change` machinery (no cache file, no lock, no previous
@@ -201,7 +245,7 @@ def hash_paths(
     files = _resolve_paths(paths, cwd=cwd)
     if not files:
         return None
-    digest = _hash_files(files)
+    digest = _hash_files(files, max_file_size=max_file_size)
     if extra_hash:
         h = xxhash.xxh64()
         h.update(digest.encode())
@@ -222,6 +266,32 @@ def _get_thread_lock(cache_name: str) -> threading.Lock:
         return _thread_locks[cache_name]
 
 
+@contextlib.contextmanager
+def _locked_cache_file(cache_name: str) -> Iterator[tuple[Path, IO[str]]]:
+    """Open the cache file for *cache_name* with thread + process locks held.
+
+    Yields ``(cache_file_path, file_handle)``.  The handle is opened in
+    ``"a+"`` mode so the file is created if missing and not truncated if it
+    already exists.  Callers can ``f.seek(0); f.read()`` to read the cached
+    hash, and ``f.seek(0); f.truncate(); f.write(...)`` to overwrite it.
+
+    The flock is taken on the cache file itself — no separate ``.lock``
+    sidecar file is created or accumulated in the cache directory.
+    """
+    cache_dir = _get_cache_dir()
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / f"{_safe_filename(cache_name)}.hash"
+
+    thread_lock = _get_thread_lock(cache_name)
+    with thread_lock:
+        with open(cache_file, "a+") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                yield cache_file, f
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+
 def did_change(
     cache_name: str,
     paths: Sequence[PathEntry],
@@ -229,6 +299,7 @@ def did_change(
     *,
     update: bool = True,
     extra_hash: str | None = None,
+    max_file_size: int | None = None,
 ) -> bool:
     """Check if any files/dirs matching the given paths have changed since last check.
 
@@ -274,13 +345,22 @@ def did_change(
         extra_hash: Optional extra string folded into the hash (e.g. a build
             command), so changes to it trigger a rebuild even if source files
             are unchanged.
+        max_file_size: If set, files larger than this (in bytes) are
+            fingerprinted by ``(size, mtime_ns)`` instead of having their
+            content streamed through xxhash.  Trades precision for constant-
+            time handling of large blobs — see :func:`_hash_files`.
 
     Returns ``True`` on the first call (no previous cache), and on subsequent
     calls returns ``True`` only if file contents differ from the last check.
     When *update* is ``True`` the cache is updated, so two consecutive calls
     with no changes return ``True`` then ``False``.
     """
-    current_hash = hash_paths(paths, cwd=cwd, extra_hash=extra_hash)
+    current_hash = hash_paths(
+        paths,
+        cwd=cwd,
+        extra_hash=extra_hash,
+        max_file_size=max_file_size,
+    )
 
     # If none of the monitored paths resolve to actual files (e.g. source
     # files don't exist on this branch or checkout), don't claim anything
@@ -293,26 +373,19 @@ def did_change(
         )
         return False
 
-    cache_dir = _get_cache_dir()
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_file = cache_dir / f"{_safe_filename(cache_name)}.hash"
-    lock_file = cache_dir / f"{_safe_filename(cache_name)}.lock"
-
     changed = True
-    thread_lock = _get_thread_lock(cache_name)
-    with thread_lock, open(lock_file, "w") as lf:
-        fcntl.flock(lf, fcntl.LOCK_EX)
-        try:
-            if cache_file.exists():
-                previous_hash = cache_file.read_text().strip()
-                changed = current_hash != previous_hash
-            # Only update the cache when requested — allows callers to defer
-            # the update until after a successful build so that a failed build
-            # doesn't prevent future rebuild attempts.
-            if update:
-                cache_file.write_text(current_hash)
-        finally:
-            fcntl.flock(lf, fcntl.LOCK_UN)
+    with _locked_cache_file(cache_name) as (_, f):
+        f.seek(0)
+        previous_hash = f.read().strip()
+        if previous_hash:
+            changed = current_hash != previous_hash
+        # Only update the cache when requested — allows callers to defer
+        # the update until after a successful build so that a failed build
+        # doesn't prevent future rebuild attempts.
+        if update:
+            f.seek(0)
+            f.truncate()
+            f.write(current_hash)
 
     return changed
 
@@ -321,12 +394,16 @@ def update_cache(
     cache_name: str,
     paths: Sequence[PathEntry],
     cwd: str | Path | None = None,
+    *,
     extra_hash: str | None = None,
+    max_file_size: int | None = None,
 ) -> None:
     """Write the current file hash to the cache without checking for changes.
 
     Call this after a successful build to record the current state so that the
     next :func:`did_change` call returns ``False`` (unless files change again).
+    Pass the same *max_file_size* you'll be passing to :func:`did_change`, or
+    the two won't agree on the hash of any large files.
 
     Example::
 
@@ -334,44 +411,37 @@ def update_cache(
             run_build()          # might fail
             update_cache("my_build", sources, extra_hash=cmd)  # only on success
     """
-    current_hash = hash_paths(paths, cwd=cwd, extra_hash=extra_hash)
+    current_hash = hash_paths(
+        paths,
+        cwd=cwd,
+        extra_hash=extra_hash,
+        max_file_size=max_file_size,
+    )
     if current_hash is None:
         return
 
-    cache_dir = _get_cache_dir()
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_file = cache_dir / f"{_safe_filename(cache_name)}.hash"
-    lock_file = cache_dir / f"{_safe_filename(cache_name)}.lock"
-
-    thread_lock = _get_thread_lock(cache_name)
-    with thread_lock, open(lock_file, "w") as lf:
-        fcntl.flock(lf, fcntl.LOCK_EX)
-        try:
-            cache_file.write_text(current_hash)
-        finally:
-            fcntl.flock(lf, fcntl.LOCK_UN)
+    with _locked_cache_file(cache_name) as (_, f):
+        f.seek(0)
+        f.truncate()
+        f.write(current_hash)
 
 
 def clear_cache(cache_name: str) -> bool:
-    """Remove the cached hash so the next ``did_change`` call returns ``True``.
+    """Truncate the cached hash so the next ``did_change`` call returns ``True``.
+
+    Returns ``True`` if there was something cached to clear.  We truncate
+    rather than ``unlink`` so the (locked) file handle stays valid for any
+    concurrent caller, and so we don't have to coordinate with cross-process
+    flockers.
 
     Example::
 
         clear_cache("my_build")
         did_change("my_build", ["/src/main.c"])  # always True after clear
     """
-    cache_dir = _get_cache_dir()
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_file = cache_dir / f"{_safe_filename(cache_name)}.hash"
-    lock_file = cache_dir / f"{_safe_filename(cache_name)}.lock"
-
-    thread_lock = _get_thread_lock(cache_name)
-    with thread_lock, open(lock_file, "w") as lf:
-        fcntl.flock(lf, fcntl.LOCK_EX)
-        try:
-            if cache_file.exists():
-                cache_file.unlink()
-                return True
-            return False
-        finally:
-            fcntl.flock(lf, fcntl.LOCK_UN)
+    with _locked_cache_file(cache_name) as (_, f):
+        f.seek(0)
+        had_content = bool(f.read().strip())
+        f.seek(0)
+        f.truncate()
+    return had_content

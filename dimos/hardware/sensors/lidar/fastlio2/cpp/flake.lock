@@ -69,11 +69,37 @@
         "type": "github"
       }
     },
+    "lcm-extended": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1774902379,
+        "narHash": "sha256-gRFvEkbXCEoG4jEmsT+i0bMZ5kDHOtAaPsrbStXjdu4=",
+        "owner": "jeff-hykin",
+        "repo": "lcm_extended",
+        "rev": "7d12ad8546d3daae30528a6c28f2c9ff5b10baf7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jeff-hykin",
+        "repo": "lcm_extended",
+        "type": "github"
+      }
+    },
     "livox-sdk": {
       "inputs": {
         "dimos-lcm": "dimos-lcm_2",
         "flake-utils": [
           "flake-utils"
+        ],
+        "lcm-extended": [
+          "lcm-extended"
         ],
         "nixpkgs": [
           "nixpkgs"
@@ -110,6 +136,7 @@
         "dimos-lcm": "dimos-lcm",
         "fast-lio": "fast-lio",
         "flake-utils": "flake-utils",
+        "lcm-extended": "lcm-extended",
         "livox-sdk": "livox-sdk",
         "nixpkgs": "nixpkgs"
       }

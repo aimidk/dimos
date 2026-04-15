@@ -41,16 +41,15 @@ Example usage::
 
 from __future__ import annotations
 
-import collections
-import enum
+import functools
 import inspect
-import json
 import os
 from pathlib import Path
 import signal
 import subprocess
 import sys
 import threading
+import time
 from typing import IO, Any
 
 from pydantic import Field
@@ -61,17 +60,33 @@ from dimos.core.module import Module, ModuleConfig
 from dimos.utils.change_detect import PathEntry, did_change, update_cache
 from dimos.utils.logging_config import setup_logger
 
+# ctypes is only needed for the Linux child-preexec helper below.  Hoisting
+# the import out of the inner function avoids re-importing on every start().
+if sys.platform.startswith("linux"):
+    import ctypes
+
+    _LIBC = ctypes.CDLL("libc.so.6", use_errno=True)
+    _PR_SET_PDEATHSIG = 1
+
+    def _child_preexec_linux() -> None:
+        """Kill child when parent dies. Linux only.
+
+        Runs in the child between fork() and exec().  Async-signal-safe
+        operations only — the call into libc.prctl is fine, but anything
+        that touches the threading runtime (allocating, importing) is not.
+        """
+        if _LIBC.prctl(_PR_SET_PDEATHSIG, signal.SIGTERM) != 0:
+            err = ctypes.get_errno()
+            raise OSError(err, f"prctl(PR_SET_PDEATHSIG) failed: {os.strerror(err)}")
+else:
+    _child_preexec_linux = None  # type: ignore[assignment]
+
 if sys.version_info < (3, 13):
     from typing_extensions import TypeVar
 else:
     from typing import TypeVar
 
 logger = setup_logger()
-
-
-class LogFormat(enum.Enum):
-    TEXT = "text"
-    JSON = "json"
 
 
 class NativeModuleConfig(ModuleConfig):
@@ -82,12 +97,15 @@ class NativeModuleConfig(ModuleConfig):
     cwd: str | None = None
     extra_args: list[str] = Field(default_factory=list)
     extra_env: dict[str, str] = Field(default_factory=dict)
-    shutdown_timeout: float = 10.0
-    log_format: LogFormat = LogFormat.TEXT
+    shutdown_timeout: float = DEFAULT_THREAD_JOIN_TIMEOUT
     rebuild_on_change: list[PathEntry] | None = None
+    # When True, always invoke ``build_command`` on start, bypassing the
+    # ``rebuild_on_change`` check.  Useful with nix-style builds that are
+    # cheap no-ops when nothing has changed (nix decides via its own cache).
+    should_rebuild: bool = False
 
     # Override in subclasses to exclude fields from CLI arg generation
-    cli_exclude: frozenset[str] = frozenset({"rebuild_on_change"})
+    cli_exclude: frozenset[str] = frozenset()
     # Override in subclasses to map field names to custom CLI arg names
     # (bypasses the automatic snake_case → camelCase conversion).
     cli_name_override: dict[str, str] = Field(default_factory=dict)
@@ -143,12 +161,9 @@ class NativeModule(Module):
     _process: subprocess.Popen[bytes] | None = None
     _watchdog: threading.Thread | None = None
     _stopping: bool = False
-    _stderr_tail: collections.deque[str]
-    _stdout_tail: collections.deque[str]
-    _tail_lock: threading.Lock
-    _tail_size = 50
+    _stop_lock: threading.Lock
 
-    @property
+    @functools.cached_property
     def _mod_label(self) -> str:
         """Short human-readable label: ClassName(executable_basename)."""
         exe = Path(self.config.executable).name if self.config.executable else "?"
@@ -156,10 +171,14 @@ class NativeModule(Module):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._stderr_tail: collections.deque[str] = collections.deque(maxlen=self._tail_size)
-        self._stdout_tail: collections.deque[str] = collections.deque(maxlen=self._tail_size)
-        self._tail_lock = threading.Lock()
-        self._resolve_paths()
+        self._stop_lock = threading.Lock()
+
+        # Resolve relative cwd and executable against the subclass's source file.
+        if self.config.cwd is not None and not Path(self.config.cwd).is_absolute():
+            base_dir = Path(inspect.getfile(type(self))).resolve().parent
+            self.config.cwd = str(base_dir / self.config.cwd)
+        if not Path(self.config.executable).is_absolute() and self.config.cwd is not None:
+            self.config.executable = str(Path(self.config.cwd) / self.config.executable)
 
     @rpc
     def start(self) -> None:
@@ -184,11 +203,6 @@ class NativeModule(Module):
         env = {**os.environ, **self.config.extra_env}
         cwd = self.config.cwd or str(Path(self.config.executable).resolve().parent)
 
-        # Reset tail buffers for this run.
-        with self._tail_lock:
-            self._stderr_tail.clear()
-            self._stdout_tail.clear()
-
         logger.info(
             "Starting native process",
             module=self._mod_label,
@@ -196,21 +210,11 @@ class NativeModule(Module):
             cwd=cwd,
         )
 
-        # fix bad-close and leaked process issues.
         # start_new_session=True is the thread-safe way to isolate the child
         # from terminal signals (SIGINT from the tty).  preexec_fn is unsafe
         # in the presence of threads (subprocess docs), so we only use it on
-        # Linux where prctl(PR_SET_PDEATHSIG) has no alternative.
-        def _child_preexec_linux() -> None:
-            """Kill child when parent dies. Linux only."""
-            import ctypes
-
-            PR_SET_PDEATHSIG = 1
-            libc = ctypes.CDLL("libc.so.6", use_errno=True)
-            if libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM) != 0:
-                err = ctypes.get_errno()
-                raise OSError(err, f"prctl(PR_SET_PDEATHSIG) failed: {os.strerror(err)}")
-
+        # Linux where prctl(PR_SET_PDEATHSIG) has no alternative — see
+        # _child_preexec_linux defined at module scope.
         self._process = subprocess.Popen(
             cmd,
             env=env,
@@ -218,7 +222,7 @@ class NativeModule(Module):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             start_new_session=True,
-            preexec_fn=_child_preexec_linux if sys.platform.startswith("linux") else None,
+            preexec_fn=_child_preexec_linux,
         )
         logger.info(
             "Native process started",
@@ -226,38 +230,57 @@ class NativeModule(Module):
             pid=self._process.pid,
         )
 
-        self._stopping = False
-        self._watchdog = threading.Thread(
+        watchdog = threading.Thread(
             target=self._watch_process,
             daemon=True,
             name=f"native-watchdog-{self._mod_label}",
         )
-        self._watchdog.start()
+        with self._stop_lock:
+            self._stopping = False
+            self._watchdog = watchdog
+        watchdog.start()
 
     @rpc
     def stop(self) -> None:
-        self._stopping = True
-        if self._process is not None and self._process.poll() is None:
+        # Two callers can race here: the RPC stop() and the watchdog calling
+        # self.stop() after it detects an unexpected exit.  Serialize on a
+        # per-instance lock and let the second caller no-op via the
+        # _stopping flag.  We capture the proc/watchdog refs under the lock
+        # but do the actual signal/wait/join *outside* it — joining the
+        # watchdog while holding the lock would deadlock with the watchdog's
+        # own stop() call waiting on the same lock.
+        with self._stop_lock:
+            if self._stopping:
+                return
+            self._stopping = True
+            proc = self._process
+            watchdog = self._watchdog
+
+        if proc is not None and proc.poll() is None:
             logger.info(
                 "Stopping native process",
                 module=self._mod_label,
-                pid=self._process.pid,
+                pid=proc.pid,
             )
-            self._process.send_signal(signal.SIGTERM)
+            proc.send_signal(signal.SIGTERM)
             try:
-                self._process.wait(timeout=DEFAULT_THREAD_JOIN_TIMEOUT)
+                proc.wait(timeout=self.config.shutdown_timeout)
             except subprocess.TimeoutExpired:
                 logger.warning(
                     "Native process did not exit, sending SIGKILL",
                     module=self._mod_label,
-                    pid=self._process.pid,
+                    pid=proc.pid,
                 )
-                self._process.kill()
-                self._process.wait(timeout=DEFAULT_THREAD_JOIN_TIMEOUT)
-        if self._watchdog is not None and self._watchdog is not threading.current_thread():
-            self._watchdog.join(timeout=DEFAULT_THREAD_JOIN_TIMEOUT)
-        self._watchdog = None
-        self._process = None
+                proc.kill()
+                proc.wait(timeout=self.config.shutdown_timeout)
+
+        if watchdog is not None and watchdog is not threading.current_thread():
+            watchdog.join(timeout=self.config.shutdown_timeout)
+
+        with self._stop_lock:
+            self._watchdog = None
+            self._process = None
+
         super().stop()
 
     def _watch_process(self) -> None:
@@ -269,11 +292,11 @@ class NativeModule(Module):
             return
         pid = proc.pid
 
-        stdout_t = self._start_reader(proc.stdout, "info", self._stdout_tail)
-        stderr_t = self._start_reader(proc.stderr, "warning", self._stderr_tail)
+        stdout_t = self._start_reader(proc.stdout, "info", pid)
+        stderr_t = self._start_reader(proc.stderr, "warning", pid)
         rc = proc.wait()
-        stdout_t.join(timeout=DEFAULT_THREAD_JOIN_TIMEOUT)
-        stderr_t.join(timeout=DEFAULT_THREAD_JOIN_TIMEOUT)
+        stdout_t.join(timeout=self.config.shutdown_timeout)
+        stderr_t.join(timeout=self.config.shutdown_timeout)
 
         if self._stopping:
             logger.info(
@@ -284,59 +307,24 @@ class NativeModule(Module):
             )
             return
 
-        # Grab the tail for diagnostics.
-        with self._tail_lock:
-            stderr_snapshot = list(self._stderr_tail)
-            stdout_snapshot = list(self._stdout_tail)
-
         logger.error(
             "Native process died unexpectedly",
             module=self._mod_label,
             pid=pid,
             returncode=rc,
-            last_stderr="\n".join(stderr_snapshot)[:500] if stderr_snapshot else None,
         )
-
-        # Log the last stderr/stdout lines so the cause is visible.
-        if stderr_snapshot:
-            logger.error(
-                f"Last {len(stderr_snapshot)} stderr lines from {self._mod_label}:",
-                module=self._mod_label,
-                pid=pid,
-            )
-            for line in stderr_snapshot:
-                logger.error(f"  stderr| {line}", module=self._mod_label)
-
-        if stdout_snapshot and not stderr_snapshot:
-            # Only dump stdout if stderr was empty (avoid double-noise).
-            logger.error(
-                f"Last {len(stdout_snapshot)} stdout lines from {self._mod_label}:",
-                module=self._mod_label,
-                pid=pid,
-            )
-            for line in stdout_snapshot:
-                logger.error(f"  stdout| {line}", module=self._mod_label)
-
-        if not stderr_snapshot and not stdout_snapshot:
-            logger.error(
-                "No output captured from native process — "
-                "binary may have crashed before producing any output",
-                module=self._mod_label,
-                pid=pid,
-            )
-
         self.stop()
 
     def _start_reader(
         self,
         stream: IO[bytes] | None,
         level: str,
-        tail_buf: collections.deque[str],
+        pid: int,
     ) -> threading.Thread:
         """Spawn a daemon thread that pipes a subprocess stream through the logger."""
         t = threading.Thread(
             target=self._read_log_stream,
-            args=(stream, level, tail_buf),
+            args=(stream, level, pid),
             daemon=True,
             name=f"native-reader-{level}-{self._mod_label}",
         )
@@ -347,7 +335,7 @@ class NativeModule(Module):
         self,
         stream: IO[bytes] | None,
         level: str,
-        tail_buf: collections.deque[str],
+        pid: int,
     ) -> None:
         if stream is None:
             return
@@ -356,58 +344,33 @@ class NativeModule(Module):
             line = raw.decode("utf-8", errors="replace").rstrip()
             if not line:
                 continue
-
-            # Keep a rolling tail buffer for crash diagnostics.
-            with self._tail_lock:
-                tail_buf.append(line)
-
-            if self.config.log_format == LogFormat.JSON:
-                try:
-                    data = json.loads(line)
-                    event = data.pop("event", line)
-                    log_fn(event, module=self._mod_label, **data)
-                    continue
-                except (json.JSONDecodeError, TypeError):
-                    logger.warning(
-                        "malformed JSON from native module",
-                        module=self._mod_label,
-                        raw=line,
-                    )
-            log_fn(line, module=self._mod_label, pid=self._process.pid if self._process else None)
+            # Use the captured pid rather than self._process.pid — stop() can
+            # null self._process out from under us between the check and the
+            # attribute read.
+            log_fn(line, module=self._mod_label, pid=pid)
         stream.close()
-
-    def _resolve_paths(self) -> None:
-        """Resolve relative ``cwd`` and ``executable`` against the subclass's source file."""
-        if self.config.cwd is not None and not Path(self.config.cwd).is_absolute():
-            source_file = inspect.getfile(type(self))
-            base_dir = Path(source_file).resolve().parent
-            self.config.cwd = str(base_dir / self.config.cwd)
-        if not Path(self.config.executable).is_absolute() and self.config.cwd is not None:
-            self.config.executable = str(Path(self.config.cwd) / self.config.executable)
-
-    def _build_cache_name(self) -> str:
-        """Return a stable, unique cache name for this module's build state."""
-        source_file = Path(inspect.getfile(type(self))).resolve()
-        return f"native_{type(self).__name__}_{source_file}"
 
     def _maybe_build(self) -> None:
         """Run ``build_command`` if the executable does not exist or sources changed."""
         exe = Path(self.config.executable)
 
-        # Check if rebuild needed due to source changes
-        needs_rebuild = False
-        if self.config.rebuild_on_change and exe.exists():
-            if did_change(
-                self._build_cache_name(),
+        # Check if rebuild needed due to source changes. We call did_change
+        # even when the exe is missing so the cache gets seeded on the first
+        # build — no separate seed step needed afterwards.
+        source_file = Path(inspect.getfile(type(self))).resolve()
+        cache_name = f"native_{type(self).__name__}_{source_file}"
+        needs_rebuild = self.config.should_rebuild or (
+            self.config.rebuild_on_change
+            and did_change(
+                cache_name,
                 self.config.rebuild_on_change,
                 cwd=self.config.cwd,
                 extra_hash=self.config.build_command,
                 update=False,
-            ):
-                logger.info("Source files changed, triggering rebuild", executable=str(exe))
-                needs_rebuild = True
+            )
+        )
 
-        if exe.exists() and not needs_rebuild:
+        if not needs_rebuild and exe.exists():
             return
 
         if self.config.build_command is None:
@@ -416,15 +379,22 @@ class NativeModule(Module):
                 "Set build_command in config to auto-build, or build it manually."
             )
 
-        # Don't unlink the exe before rebuilding — the build command is
-        # responsible for replacing it.  For nix builds the exe lives inside
-        # a read-only store; `nix build -o` atomically swaps the output
-        # symlink without touching store contents.
+        # Clear the old executable before rebuilding so a failed build can't
+        # leave us accidentally running a stale binary.
+        #
+        # Note: deletion isn't a straightforward rm -rf.
+        # For nix builds, the exe lives at something like ``cpp/result/bin/mid360``
+        # where ``result`` is a symlink into the read-only /nix/store.
+        # Trying to delete the executable itself will cause a permission error
+        # We have to walk up to the `result` dir and then unlink that
+        _clear_nix_executable(exe, Path(self.config.cwd) if self.config.cwd else None)
+
         logger.info(
             "Rebuilding" if needs_rebuild else "Executable not found, building",
             executable=str(exe),
             build_command=self.config.build_command,
         )
+        build_start = time.perf_counter()
         proc = subprocess.Popen(
             self.config.build_command,
             shell=True,
@@ -434,6 +404,7 @@ class NativeModule(Module):
             stderr=subprocess.PIPE,
         )
         stdout, stderr = proc.communicate()
+        build_elapsed = time.perf_counter() - build_start
 
         stdout_lines = stdout.decode("utf-8", errors="replace").splitlines()
         stderr_lines = stderr.decode("utf-8", errors="replace").splitlines()
@@ -450,7 +421,7 @@ class NativeModule(Module):
             tail = [l for l in stderr_lines if l.strip()][-20:]
             tail_str = "\n".join(tail) if tail else "(no stderr output)"
             raise RuntimeError(
-                f"[{self._mod_label}] Build command failed "
+                f"[{self._mod_label}] Build command failed after {build_elapsed:.2f}s "
                 f"(exit {proc.returncode}): {self.config.build_command}\n"
                 f"--- last stderr ---\n{tail_str}"
             )
@@ -459,11 +430,19 @@ class NativeModule(Module):
                 f"[{self._mod_label}] Build command succeeded but executable still not found: {exe}"
             )
 
-        # Seed the cache after a successful build so the next check has a baseline
-        # (needed for the initial build when the pre-build change check was skipped)
+        logger.info(
+            "Build command completed",
+            module=self._mod_label,
+            executable=str(exe),
+            duration_sec=round(build_elapsed, 3),
+        )
+
+        # Only update the source-hash cache after a successful build, so a
+        # failed build doesn't trick the next call into thinking everything
+        # is current.
         if self.config.rebuild_on_change:
             update_cache(
-                self._build_cache_name(),
+                cache_name,
                 self.config.rebuild_on_change,
                 cwd=self.config.cwd,
                 extra_hash=self.config.build_command,
@@ -485,8 +464,50 @@ class NativeModule(Module):
         return topics
 
 
+def _clear_nix_executable(exe: Path, cwd: Path | None) -> None:
+    """Remove the old exe (or its nix ``result``-style symlink ancestor).
+
+    Walks from *exe* upward, bounded by *cwd*, looking for the innermost
+    symlinked ancestor.  If one is found, it's unlinked.  Otherwise, if the
+    exe itself exists as a regular file, it's unlinked.
+
+    *cwd* is required and acts as a safety boundary: the walk only considers
+    ancestors strictly under *cwd*, so we can never accidentally unlink
+    something like ``/usr/local`` if the exe happens to be ``/usr/local/bin/foo``
+    and ``/usr/local`` is a symlink (common on macOS with Homebrew).
+    """
+    if cwd is None:
+        # No cwd → no safe upper bound for the walk, so refuse to climb.
+        # Just unlink the exe itself if it exists.
+        if exe.is_symlink() or exe.exists():
+            exe.unlink(missing_ok=True)
+        return
+
+    cwd_resolved = cwd.resolve()
+    found_symlink: Path | None = None
+    candidate: Path = exe
+    while True:
+        # Stop at cwd — we never unlink the cwd itself, even if it's a symlink.
+        if candidate == cwd or candidate.resolve() == cwd_resolved:
+            break
+        if candidate.is_symlink():
+            found_symlink = candidate
+            break
+        parent = candidate.parent
+        if parent == candidate:
+            # Reached filesystem root without ever passing through cwd —
+            # exe is outside cwd's tree; refuse to walk.
+            found_symlink = None
+            break
+        candidate = parent
+
+    if found_symlink is not None:
+        found_symlink.unlink(missing_ok=True)
+    elif exe.is_symlink() or exe.exists():
+        exe.unlink(missing_ok=True)
+
+
 __all__ = [
-    "LogFormat",
     "NativeModule",
     "NativeModuleConfig",
 ]
