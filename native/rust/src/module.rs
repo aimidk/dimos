@@ -80,10 +80,12 @@ fn parse_config_json<C: DeserializeOwned>(line: &str) -> io::Result<(HashMap<Str
     }
 
     let config: C = match json.get("config") {
-        None => return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "missing 'config' field in stdin JSON — coordinator must always send a config object",
-        )),
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "missing 'config' field in stdin JSON — coordinator must always send a config object",
+            ))
+        }
         Some(v) => serde_json::from_value(v.clone()).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -161,7 +163,7 @@ impl<T: Transport> NativeModule<T> {
     /// {"topics": {"port_name": "lcm/topic", ...}, "config": { ... }}
     /// ```
     ///
-    /// `C` is the module-specific config type. Use `()` if there is no extra configs to pass.
+    /// `C` is the module-specific config type. Use `()` for modules with no configuration.
     pub async fn from_stdin<C: DeserializeOwned + std::fmt::Debug>(
         transport: T,
     ) -> io::Result<(Self, C)> {
@@ -248,7 +250,10 @@ impl<T: Transport> NativeModule<T> {
                                 }
                             }
                         }
-                        Err(e) => eprintln!("dimos_module: recv error: {e}"),
+                        Err(e) => {
+                            eprintln!("dimos_module: recv error: {e}");
+                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                        }
                     },
                     Some((topic, data)) = publish_rx.recv() => {
                         if let Err(e) = transport.publish(&topic, &data).await {
@@ -325,8 +330,7 @@ mod tests {
     #[test]
     fn null_config_succeeds_for_unit_type() {
         let json = r#"{"topics": {}, "config": null}"#;
-        let (_topics, config) = parse_config_json::<()>(json).unwrap();
-        assert_eq!(config, ());
+        let (_topics, _config) = parse_config_json::<()>(json).unwrap();
     }
 
     #[test]

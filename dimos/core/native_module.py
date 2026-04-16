@@ -175,10 +175,7 @@ class NativeModule(Module):
             cwd=cwd,
         )
         config_dict = self.config.to_config_dict()
-        stdin_blob = (
-            json.dumps({"topics": topics, "config": config_dict if config_dict else None}).encode()
-            + b"\n"
-        )
+        stdin_blob = json.dumps({"topics": topics, "config": config_dict or None}).encode() + b"\n"
 
         self._process = subprocess.Popen(
             cmd,
