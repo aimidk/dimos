@@ -1,6 +1,4 @@
-use std::io::{self, Write};
-use std::fs::OpenOptions;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::io;
 
 use dimos_native_module::{LcmTransport, NativeModule};
 use lcm_msgs::geometry_msgs::{Point, Pose, Quaternion};
@@ -182,21 +180,6 @@ fn height_cost_occupancy(cloud: &PointCloud2, cfg: &CostMapperConfig) -> Occupan
     build_grid(cost_vec, w, h, cfg.resolution as f32, min_x, min_y, &frame_id, ts)
 }
 
-fn write_timing_row(compute_ms: f64, total_ms: f64, n_points: usize) {
-    let path = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()) + "/costmapper_timing_rust.csv";
-    let needs_header = !std::path::Path::new(&path).exists();
-    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path) {
-        if needs_header {
-            let _ = writeln!(f, "timestamp_s,compute_ms,total_ms,n_points");
-        }
-        let ts = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs_f64())
-            .unwrap_or(0.0);
-        let _ = writeln!(f, "{:.6},{:.3},{:.3},{}", ts, compute_ms, total_ms, n_points);
-    }
-}
-
 fn build_grid(
     data: Vec<i8>,
     width: usize,
@@ -249,14 +232,8 @@ async fn main() -> io::Result<()> {
     loop {
         match global_map.recv().await {
             Some(cloud) => {
-                let t_total = Instant::now();
-                let n_points = (cloud.width * cloud.height) as usize;
-                let t_compute = Instant::now();
                 let grid = height_cost_occupancy(&cloud, &config);
-                let compute_ms = t_compute.elapsed().as_secs_f64() * 1000.0;
                 global_costmap.publish(&grid).await.ok();
-                let total_ms = t_total.elapsed().as_secs_f64() * 1000.0;
-                write_timing_row(compute_ms, total_ms, n_points);
             }
             None => break,
         }
