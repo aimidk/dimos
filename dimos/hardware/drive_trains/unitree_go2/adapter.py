@@ -110,11 +110,12 @@ class UnitreeGo2TwistAdapter:
             1 = fast (default, max). Applied once after FreeWalk succeeds.
             May be ignored in non-'normal' modes (mcf runs its own planner).
             Change at runtime via set_speed_level().
-        rage_mode: If True (default), enable Rage Mode at the end of
-            connect(). Widens the forward envelope to ~2.5 m/s via a
-            dedicated mcf AI policy. See set_rage_mode() for details.
-            Failure to enable is non-fatal — connect still returns True
-            and the robot stays in regular FreeWalk.
+        rage_mode: If True, enable Rage Mode at the end of connect().
+            DEFAULT IS FALSE — Rage toggle returns success but Move()
+            commands get filtered somewhere downstream (sport_mode_num
+            stays at 0, robot doesn't respond). Kept as opt-in for
+            future experimentation. See set_rage_mode() + notes at
+            data/notes/go2_firmware_modes.md.
 
     TODO(network_interface): multi-NIC hosts may need an explicit DDS
     interface name passed through to ChannelFactoryInitialize(0, iface).
@@ -138,7 +139,7 @@ class UnitreeGo2TwistAdapter:
         self,
         dof: int = 3,
         speed_level: int = 1,
-        rage_mode: bool = True,
+        rage_mode: bool = False,
         **_: object,
     ) -> None:
         if dof != 3:
@@ -148,7 +149,6 @@ class UnitreeGo2TwistAdapter:
         self._session_lock = threading.Lock()
         self._speed_level = speed_level
         self._rage_mode_default = rage_mode
-        self._last_move_log_ts: float = 0.0
 
     # =========================================================================
     # TwistBaseAdapter protocol
@@ -1085,20 +1085,6 @@ class UnitreeGo2TwistAdapter:
         Returns False on SDK exception or non-zero return code.
         """
         session = self._get_session()
-        now = time.monotonic()
-        nonzero = abs(vx) + abs(vy) + abs(wz) > 1e-3
-        if nonzero and now - self._last_move_log_ts > 0.5:
-            mode_num = None
-            if session.latest_state is not None:
-                try:
-                    mode_num = int(session.latest_state.mode)
-                except Exception:
-                    pass
-            logger.info(
-                f"[Go2] Move(vx={vx:+.2f}, vy={vy:+.2f}, wz={wz:+.2f})  "
-                f"sport_mode_num={mode_num}"
-            )
-            self._last_move_log_ts = now
         try:
             with session.lock:
                 ret = session.client.Move(vx, vy, wz)
