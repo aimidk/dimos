@@ -28,7 +28,7 @@ import time
 from typing import Any
 import webbrowser
 
-from dimos_lcm.std_msgs import Bool  # type: ignore[import-untyped]
+from dimos_lcm.std_msgs import Bool
 from reactivex.disposable import Disposable
 import socketio  # type: ignore[import-untyped]
 from starlette.applications import Starlette
@@ -47,6 +47,7 @@ _COMMAND_CENTER_DIR = (
 
 from dimos.constants import DEFAULT_THREAD_JOIN_TIMEOUT
 from dimos.core.core import rpc
+from dimos.core.global_config import global_config
 from dimos.core.module import Module, ModuleConfig
 from dimos.core.stream import In, Out
 from dimos.mapping.models import LatLon
@@ -72,7 +73,7 @@ class WebsocketConfig(ModuleConfig):
     port: int = 7779
 
 
-class WebsocketVisModule(Module[WebsocketConfig]):
+class WebsocketVisModule(Module):
     """
     WebSocket-based visualization module for real-time navigation data.
 
@@ -91,7 +92,7 @@ class WebsocketVisModule(Module[WebsocketConfig]):
         - click_goal: Goal position from user clicks
     """
 
-    default_config = WebsocketConfig
+    config: WebsocketConfig
 
     # LCM inputs
     odom: In[PoseStamped]
@@ -174,25 +175,25 @@ class WebsocketVisModule(Module[WebsocketConfig]):
 
         try:
             unsub = self.odom.subscribe(self._on_robot_pose)
-            self._disposables.add(Disposable(unsub))
+            self.register_disposable(Disposable(unsub))
         except Exception:
             ...
 
         try:
             unsub = self.gps_location.subscribe(self._on_gps_location)
-            self._disposables.add(Disposable(unsub))
+            self.register_disposable(Disposable(unsub))
         except Exception:
             ...
 
         try:
             unsub = self.path.subscribe(self._on_path)
-            self._disposables.add(Disposable(unsub))
+            self.register_disposable(Disposable(unsub))
         except Exception:
             ...
 
         try:
             unsub = self.global_costmap.subscribe(self._on_global_costmap)
-            self._disposables.add(Disposable(unsub))
+            self.register_disposable(Disposable(unsub))
         except Exception:
             ...
 
@@ -356,7 +357,7 @@ class WebsocketVisModule(Module[WebsocketConfig]):
     def _run_uvicorn_server(self) -> None:
         config = uvicorn.Config(
             self.app,  # type: ignore[arg-type]
-            host="0.0.0.0",
+            host=global_config.listen_host,
             port=self.config.port,
             log_level="error",  # Reduce verbosity
         )
