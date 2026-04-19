@@ -72,22 +72,26 @@ BRIDGE_PORT = 8090
 # (name, x, y, z, timeout_sec, reach_threshold_m)
 #
 # Robot spawns at ~(3.0, 2.0) in the living room.
+# Waypoints step incrementally so the planner always has map coverage.
 WAYPOINTS = [
-    # Phase 1: Open corridor — straight drive, no obstacles nearby
-    ("p0_open", 6.0, 2.0, 0.0, 45, 2.0),
+    # Phase 1: Open corridor — straight drive forward, no obstacles
+    ("p0_open", 5.5, 2.0, 0.0, 45, 2.0),
 
-    # Phase 2: Furniture — navigate into the hallway/dining area past furniture
-    ("p1_furniture", 2.0, 0.0, 0.0, 90, 2.0),
+    # Phase 2: Furniture — step toward dining area, navigating past furniture
+    ("p1_toward_dining", 3.0, 0.5, 0.0, 60, 2.0),
+    ("p2_dining", 1.5, 0.5, 0.0, 60, 2.0),
 
-    # Phase 3: Explore wall — drive to map the divider wall from hallway side
-    ("p2_wall_side_a", -1.0, 0.0, 0.0, 90, 2.0),
-    # Then explore from the kitchen/bedroom side
-    ("p3_wall_side_b", -1.0, -3.0, 0.0, 90, 2.0),
+    # Phase 3: Explore toward wall — incremental steps toward the divider
+    ("p3_hallway", 0.0, 0.5, 0.0, 60, 2.0),
+    ("p4_near_wall", -1.0, 0.0, 0.0, 60, 2.0),
 
-    # Phase 4: Cross-wall — goal in bedroom, on the other side of the wall.
-    # From the kitchen side, the greedy path to this point crosses through
-    # the bedroom wall. The planner must route through a doorway.
-    ("p4_cross_wall", -3.0, -2.0, 0.0, 120, 2.5),
+    # Phase 4: Go around to the other side of the wall
+    ("p5_kitchen_entry", -1.0, -2.5, 0.0, 90, 2.0),
+
+    # Phase 5: Cross-wall — goal in bedroom, behind the wall.
+    # A greedy planner would try straight-line back to p3_hallway through
+    # the wall. The planner must route through the doorway.
+    ("p6_cross_wall", -3.0, -2.0, 0.0, 120, 2.5),
 ]
 
 WARMUP_SEC = 20.0  # Let nav stack build initial voxel map
@@ -293,10 +297,12 @@ class TestDimSimCrossWall:
                 lc_pub.publish(GOAL_TOPIC, goal.lcm_encode())
                 print(f"[test] Goal published for {name}")
 
-                # Wait for robot to reach goal or timeout
+                # Wait for robot to reach goal or timeout.
+                # Re-publish goal every 10s to keep planner focused.
                 t0 = time.monotonic()
                 reached = False
                 last_print = t0
+                last_goal_pub = t0
                 while True:
                     with lock:
                         cx, cy = robot_x, robot_y
@@ -304,6 +310,14 @@ class TestDimSimCrossWall:
                     dist = _distance(cx, cy, gx, gy)
                     now = time.monotonic()
                     elapsed = now - t0
+
+                    # Re-publish goal periodically
+                    if now - last_goal_pub >= 10.0:
+                        goal = PointStamped(
+                            x=gx, y=gy, z=gz, ts=time.time(), frame_id="map"
+                        )
+                        lc_pub.publish(GOAL_TOPIC, goal.lcm_encode())
+                        last_goal_pub = now
 
                     if now - last_print >= 5.0:
                         print(
