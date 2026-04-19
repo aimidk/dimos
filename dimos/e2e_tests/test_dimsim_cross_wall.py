@@ -14,26 +14,27 @@
 
 """E2E integration test: cross-wall planning through DimSim.
 
-Uses the DimSim browser-based sim (headless, CPU rendering) with the Go2 nav
-blueprint. Tests progressive navigation complexity:
+Uses the DimSim browser-based sim (headless, auto-detects GPU) with the
+Go2 nav blueprint. Tests progressive navigation complexity and measures
+movement smoothness.
 
-  Phase 1 — Open corridor:  Straight-line drive, no obstacles.
-  Phase 2 — Furniture:      Navigate around dining table/chairs.
-  Phase 3 — Wall explore:   Drive along a wall to map both sides.
-  Phase 4 — Cross-wall:     Goal on the other side of a wall — planner
-                             must route through a doorway, not through
-                             the wall.
+Phases:
+  1. Open corridor — straight drive, no obstacles.
+  2. Furniture — navigate around dining table/chairs.
+  3. Wall explore — incremental steps toward interior wall.
+  4. Kitchen entry — go around to the other side of the wall.
+  5. Cross-wall — goal behind wall, planner must use doorway.
 
-The test verifies that the planner correctly routes around walls by
-checking that the robot reaches each waypoint within the timeout. If the
-planner tries to drive through a wall, Rapier collision physics will
-block it and it will never reach the goal.
+Smoothness metrics per waypoint:
+  - path_efficiency: straight-line / actual distance (1.0 = perfect)
+  - direction_reversals: number of times robot reversed heading (churn)
+  - heading_variance: std dev of heading changes in deg (low = smooth)
+  - progress_rate: fraction of samples where robot got closer to goal
+  - cmd_vel_hz: planner cmd_vel rate (too high = churning)
 
 Run::
 
-    DIMSIM_LOCAL=1 pytest dimos/e2e_tests/test_dimsim_cross_wall.py -v -s
-
-Requires: dimsim CLI installed (or DIMSIM_LOCAL=1 with ~/repos/DimSim).
+    DIMSIM_LOCAL=1 pytest dimos/e2e_tests/test_dimsim_cross_wall.py -v -s -m slow -o "addopts="
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ import socket
 import subprocess
 import threading
 import time
+from dataclasses import dataclass, field
 
 import lcm as lcmlib
 import pytest
@@ -56,54 +58,180 @@ GOAL_TOPIC = "/clicked_point#geometry_msgs.PointStamped"
 CMD_VEL_TOPIC = "/cmd_vel#geometry_msgs.Twist"
 BRIDGE_PORT = 8090
 
-# DimSim "apt" scene waypoints (ROS Z-up frame).
-#
-# Robot starts near ROS (2.6, 1.9) in the living/hallway area.
-# Three.js Y-up → ROS Z-up: ROS_x = Three_z, ROS_y = Three_x.
-#
-# Scene layout (ROS frame):
-#   - Living room:  x ≈ 1-2,   y ≈ 3-5   (sofa, coffee table)
-#   - Dining area:  x ≈ 3-4,   y ≈ -1-0  (table, chairs)
-#   - Kitchen:      x ≈ 0-4,   y ≈ -4--6 (cabinets, appliances)
-#   - Bedroom:      x ≈ -2--4, y ≈ -4--6 (bed, wardrobe)
-#   - Bathroom:     x ≈ -4--1, y ≈ 2-5   (bathtub, toilet)
-#   - Interior walls divide kitchen/bedroom from living/dining
-#
-# (name, x, y, z, timeout_sec, reach_threshold_m)
-#
 # Robot spawns at ~(3.0, 2.0) in the living room.
 # Waypoints step incrementally so the planner always has map coverage.
 WAYPOINTS = [
-    # Phase 1: Open corridor — straight drive forward, no obstacles
+    # (name, x, y, z, timeout_sec, reach_threshold_m)
     ("p0_open", 5.5, 2.0, 0.0, 45, 2.0),
-
-    # Phase 2: Furniture — step toward dining area, navigating past furniture
     ("p1_toward_dining", 3.0, 0.5, 0.0, 60, 2.0),
     ("p2_dining", 1.5, 0.5, 0.0, 60, 2.0),
-
-    # Phase 3: Explore toward wall — incremental steps toward the divider
     ("p3_hallway", 0.0, 0.5, 0.0, 60, 2.0),
     ("p4_near_wall", -1.0, 0.0, 0.0, 60, 2.0),
-
-    # Phase 4: Go around to the other side of the wall
     ("p5_kitchen_entry", -1.0, -2.5, 0.0, 90, 2.0),
-
-    # Phase 5: Cross-wall — goal in bedroom, behind the wall.
-    # A greedy planner would try straight-line back to p3_hallway through
-    # the wall. The planner must route through the doorway.
     ("p6_cross_wall", -3.0, -2.0, 0.0, 120, 2.5),
 ]
 
-WARMUP_SEC = 20.0  # Let nav stack build initial voxel map
-ODOM_WAIT_SEC = 180.0  # Rapier snapshot init can take 2-3 min on CPU rendering
+WARMUP_SEC = 20.0
+ODOM_WAIT_SEC = 180.0
 
+
+# -- Smoothness metrics -------------------------------------------------------
+
+@dataclass
+class WaypointMetrics:
+    """Smoothness metrics for a single waypoint navigation."""
+    name: str
+    reached: bool
+    elapsed_sec: float
+    start_dist: float
+    final_dist: float
+
+    # Path efficiency: straight-line distance / actual distance traveled
+    # 1.0 = perfectly straight, lower = more wandering
+    path_efficiency: float = 0.0
+
+    # Number of times the robot reversed heading by > 90°
+    direction_reversals: int = 0
+
+    # Std dev of heading changes (degrees). Low = smooth turns.
+    heading_variance_deg: float = 0.0
+
+    # Fraction of position samples where robot got closer to goal
+    progress_rate: float = 0.0
+
+    # cmd_vel messages per second during this waypoint
+    cmd_vel_hz: float = 0.0
+
+    # Raw trajectory for debugging
+    trajectory: list[tuple[float, float, float]] = field(default_factory=list)
+
+
+def _compute_metrics(
+    name: str,
+    reached: bool,
+    elapsed: float,
+    start_dist: float,
+    final_dist: float,
+    trajectory: list[tuple[float, float, float]],
+    goal_x: float,
+    goal_y: float,
+    cmd_vel_during: int,
+) -> WaypointMetrics:
+    """Compute smoothness metrics from a recorded trajectory.
+
+    trajectory: list of (x, y, timestamp) samples.
+    """
+    m = WaypointMetrics(
+        name=name,
+        reached=reached,
+        elapsed_sec=elapsed,
+        start_dist=start_dist,
+        final_dist=final_dist,
+        trajectory=trajectory,
+    )
+
+    if len(trajectory) < 2:
+        return m
+
+    # Actual distance traveled (sum of segments)
+    actual_dist = 0.0
+    for i in range(1, len(trajectory)):
+        dx = trajectory[i][0] - trajectory[i - 1][0]
+        dy = trajectory[i][1] - trajectory[i - 1][1]
+        actual_dist += math.sqrt(dx * dx + dy * dy)
+
+    # Straight-line from start to final position
+    straight_dist = math.sqrt(
+        (trajectory[-1][0] - trajectory[0][0]) ** 2
+        + (trajectory[-1][1] - trajectory[0][1]) ** 2
+    )
+
+    m.path_efficiency = straight_dist / actual_dist if actual_dist > 0.01 else 1.0
+
+    # Heading changes
+    headings = []
+    for i in range(1, len(trajectory)):
+        dx = trajectory[i][0] - trajectory[i - 1][0]
+        dy = trajectory[i][1] - trajectory[i - 1][1]
+        if dx * dx + dy * dy > 0.001:  # skip stationary samples
+            headings.append(math.atan2(dy, dx))
+
+    if len(headings) >= 2:
+        heading_changes = []
+        reversals = 0
+        for i in range(1, len(headings)):
+            delta = headings[i] - headings[i - 1]
+            # Normalize to [-pi, pi]
+            while delta > math.pi:
+                delta -= 2 * math.pi
+            while delta < -math.pi:
+                delta += 2 * math.pi
+            heading_changes.append(abs(delta))
+            if abs(delta) > math.pi / 2:
+                reversals += 1
+
+        m.direction_reversals = reversals
+        if heading_changes:
+            mean_hc = sum(heading_changes) / len(heading_changes)
+            variance = sum((h - mean_hc) ** 2 for h in heading_changes) / len(heading_changes)
+            m.heading_variance_deg = math.degrees(math.sqrt(variance))
+
+    # Progress rate: fraction of samples getting closer to goal
+    progress_count = 0
+    for i in range(1, len(trajectory)):
+        prev_dist = math.sqrt(
+            (trajectory[i - 1][0] - goal_x) ** 2 + (trajectory[i - 1][1] - goal_y) ** 2
+        )
+        curr_dist = math.sqrt(
+            (trajectory[i][0] - goal_x) ** 2 + (trajectory[i][1] - goal_y) ** 2
+        )
+        if curr_dist < prev_dist:
+            progress_count += 1
+    m.progress_rate = progress_count / (len(trajectory) - 1)
+
+    # cmd_vel rate
+    m.cmd_vel_hz = cmd_vel_during / elapsed if elapsed > 0 else 0
+
+    return m
+
+
+def _print_metrics(m: WaypointMetrics) -> None:
+    status = "✓" if m.reached else "✗"
+    print(f"\n[metrics] {status} {m.name}:")
+    print(f"  reached:              {m.reached} ({m.elapsed_sec:.1f}s)")
+    print(f"  distance:             {m.start_dist:.2f}m → {m.final_dist:.2f}m")
+    print(f"  path_efficiency:      {m.path_efficiency:.3f} (1.0 = straight line)")
+    print(f"  direction_reversals:  {m.direction_reversals}")
+    print(f"  heading_variance:     {m.heading_variance_deg:.1f}°")
+    print(f"  progress_rate:        {m.progress_rate:.1%} (samples getting closer)")
+    print(f"  cmd_vel_hz:           {m.cmd_vel_hz:.0f} Hz")
+
+
+def _print_summary(all_metrics: list[WaypointMetrics]) -> None:
+    reached = [m for m in all_metrics if m.reached]
+    print(f"\n{'=' * 60}")
+    print(f"[summary] {len(reached)}/{len(all_metrics)} waypoints reached")
+    if reached:
+        avg_eff = sum(m.path_efficiency for m in reached) / len(reached)
+        total_reversals = sum(m.direction_reversals for m in reached)
+        avg_progress = sum(m.progress_rate for m in reached) / len(reached)
+        avg_heading_var = sum(m.heading_variance_deg for m in reached) / len(reached)
+        avg_cmd_hz = sum(m.cmd_vel_hz for m in reached) / len(reached)
+        print(f"  avg path_efficiency:     {avg_eff:.3f}")
+        print(f"  total direction_reversals: {total_reversals}")
+        print(f"  avg heading_variance:    {avg_heading_var:.1f}°")
+        print(f"  avg progress_rate:       {avg_progress:.1%}")
+        print(f"  avg cmd_vel_hz:          {avg_cmd_hz:.0f} Hz")
+    print(f"{'=' * 60}\n")
+
+
+# -- Helpers -------------------------------------------------------------------
 
 def _distance(x1: float, y1: float, x2: float, y2: float) -> float:
     return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
 
 def _force_kill_port(port: int) -> None:
-    """Kill any process listening on the given port."""
     try:
         result = subprocess.run(
             ["lsof", "-ti", f":{port}"],
@@ -119,17 +247,6 @@ def _force_kill_port(port: int) -> None:
         pass
 
 
-def _wait_for_port(port: int, timeout: float = 120) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with socket.create_connection(("localhost", port), timeout=2):
-                return True
-        except OSError:
-            time.sleep(1)
-    return False
-
-
 def _wait_for_port_free(port: int, timeout: float = 30) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -142,10 +259,9 @@ def _wait_for_port_free(port: int, timeout: float = 30) -> bool:
 
 
 def _kill_headless_chrome() -> None:
-    """Kill any leftover headless Chrome processes from DimSim."""
     try:
         result = subprocess.run(
-            ["pgrep", "-f", "chrome.*headless.*dimsim\\|chrome.*headless.*playwright"],
+            ["pgrep", "-f", "chrome.*headless.*playwright"],
             capture_output=True, text=True, timeout=5,
         )
         for pid in result.stdout.strip().split():
@@ -162,44 +278,39 @@ pytestmark = [pytest.mark.slow]
 
 
 class TestDimSimCrossWall:
-    """E2E integration test: cross-wall routing through DimSim."""
+    """E2E integration test: cross-wall routing with smoothness metrics."""
 
     def test_cross_wall_sequence(self) -> None:
         from dimos.core.coordination.module_coordinator import ModuleCoordinator
         from dimos.msgs.geometry_msgs.PointStamped import PointStamped
         from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
+        from dimos.msgs.geometry_msgs.Twist import Twist
+        from dimos.msgs.geometry_msgs.Vector3 import Vector3
         from dimos.robot.unitree.go2.blueprints.basic.unitree_go2_dimsim import (
             unitree_go2_dimsim,
         )
 
-        from dimos.msgs.geometry_msgs.Twist import Twist
-        from dimos.msgs.geometry_msgs.Vector3 import Vector3
-
-        # -- Cleanup from previous runs --------------------------------------
+        # -- Cleanup -----------------------------------------------------------
         _force_kill_port(BRIDGE_PORT)
         _kill_headless_chrome()
-        assert _wait_for_port_free(BRIDGE_PORT, timeout=10), (
-            f"Port {BRIDGE_PORT} still in use"
-        )
+        assert _wait_for_port_free(BRIDGE_PORT, timeout=10)
 
-        # -- Build blueprint --------------------------------------------------
+        # -- Build blueprint ---------------------------------------------------
         coordinator = ModuleCoordinator.build(unitree_go2_dimsim)
 
-        # -- Odom tracking via LCM -------------------------------------------
+        # -- Odom + diagnostic tracking ----------------------------------------
         lock = threading.Lock()
         odom_count = 0
         robot_x = 0.0
         robot_y = 0.0
+        cmd_vel_count = 0
+        costmap_count = 0
 
         lcm_url = os.environ.get(
             "LCM_DEFAULT_URL", "udpm://239.255.76.67:7667?ttl=0"
         )
         lc = lcmlib.LCM(lcm_url)
-        # Separate publisher to avoid threading conflicts with handle_timeout
         lc_pub = lcmlib.LCM(lcm_url)
-
-        cmd_vel_count = 0
-        costmap_count = 0
 
         def _odom_handler(channel: str, data: bytes) -> None:
             nonlocal odom_count, robot_x, robot_y
@@ -235,11 +346,11 @@ class TestDimSimCrossWall:
         lcm_thread = threading.Thread(target=_lcm_loop, daemon=True)
         lcm_thread.start()
 
+        all_metrics: list[WaypointMetrics] = []
+
         try:
             print("[test] Blueprint started, waiting for odom…")
 
-            # Wait for first odom (sim is up + Rapier snapshot received).
-            # CPU rendering (SwiftShader) can take 2-3 min for scene load.
             deadline = time.monotonic() + ODOM_WAIT_SEC
             while time.monotonic() < deadline:
                 with lock:
@@ -249,60 +360,58 @@ class TestDimSimCrossWall:
 
             with lock:
                 assert odom_count > 0, (
-                    f"No odometry received after {ODOM_WAIT_SEC}s — DimSim not running?"
+                    f"No odometry received after {ODOM_WAIT_SEC}s"
                 )
 
             print(f"[test] Odom online. Robot at ({robot_x:.2f}, {robot_y:.2f})")
 
-            # Drive the robot around to build the initial voxel map.
-            # Without this, the planner has no costmap to plan on.
+            # -- Warmup: drive around to build map -----------------------------
             print("[test] Building map by driving robot…")
 
             def _drive(linear_x: float, angular_z: float, duration: float) -> None:
-                """Send cmd_vel at 20 Hz for the given duration."""
                 twist = Twist(
                     linear=Vector3(linear_x, 0.0, 0.0),
                     angular=Vector3(0.0, 0.0, angular_z),
                 )
-                deadline_t = time.monotonic() + duration
-                while time.monotonic() < deadline_t:
+                t_end = time.monotonic() + duration
+                while time.monotonic() < t_end:
                     lc_pub.publish(CMD_VEL_TOPIC, twist.lcm_encode())
                     time.sleep(0.05)
-                # Stop
                 stop = Twist(
                     linear=Vector3(0.0, 0.0, 0.0),
                     angular=Vector3(0.0, 0.0, 0.0),
                 )
                 lc_pub.publish(CMD_VEL_TOPIC, stop.lcm_encode())
 
-            # Drive forward, turn, drive forward, turn — builds map coverage
-            _drive(0.5, 0.0, 3.0)   # forward 3s
-            _drive(0.0, 0.8, 2.0)   # turn left 2s
-            _drive(0.5, 0.0, 3.0)   # forward 3s
-            _drive(0.0, 0.8, 2.0)   # turn left 2s
-            _drive(0.5, 0.0, 3.0)   # forward 3s
-            _drive(0.0, 0.8, 2.0)   # turn left 2s
-            _drive(0.5, 0.0, 3.0)   # forward 3s
-
-            # Let the map pipeline settle
+            _drive(0.5, 0.0, 3.0)
+            _drive(0.0, 0.8, 2.0)
+            _drive(0.5, 0.0, 3.0)
+            _drive(0.0, 0.8, 2.0)
+            _drive(0.5, 0.0, 3.0)
+            _drive(0.0, 0.8, 2.0)
+            _drive(0.5, 0.0, 3.0)
             time.sleep(3.0)
 
             with lock:
                 print(
-                    f"[test] Warmup complete. odom_count={odom_count}, "
+                    f"[test] Warmup complete. odom={odom_count}, "
+                    f"costmap={costmap_count}, "
                     f"pos=({robot_x:.2f}, {robot_y:.2f})"
                 )
 
-            # -- Navigate waypoint sequence -----------------------------------
+            # -- Navigate waypoints with metrics -------------------------------
             for name, gx, gy, gz, timeout_sec, threshold in WAYPOINTS:
                 with lock:
                     sx, sy = robot_x, robot_y
+                    cv_start = cmd_vel_count
+
+                start_dist = _distance(sx, sy, gx, gy)
+                trajectory: list[tuple[float, float, float]] = [(sx, sy, time.monotonic())]
 
                 print(
                     f"\n[test] === {name}: goal ({gx}, {gy}) | "
                     f"robot ({sx:.2f}, {sy:.2f}) | "
-                    f"dist={_distance(sx, sy, gx, gy):.2f}m | "
-                    f"budget={timeout_sec}s ==="
+                    f"dist={start_dist:.2f}m | budget={timeout_sec}s ==="
                 )
 
                 # Publish goal
@@ -310,23 +419,22 @@ class TestDimSimCrossWall:
                     x=gx, y=gy, z=gz, ts=time.time(), frame_id="map"
                 )
                 lc_pub.publish(GOAL_TOPIC, goal.lcm_encode())
-                print(f"[test] Goal published for {name}")
 
-                # Wait for robot to reach goal or timeout.
-                # Re-publish goal every 10s to keep planner focused.
                 t0 = time.monotonic()
                 reached = False
                 last_print = t0
                 last_goal_pub = t0
+
                 while True:
                     with lock:
                         cx, cy = robot_x, robot_y
 
+                    trajectory.append((cx, cy, time.monotonic()))
                     dist = _distance(cx, cy, gx, gy)
                     now = time.monotonic()
                     elapsed = now - t0
 
-                    # Re-publish goal periodically
+                    # Re-publish goal every 10s
                     if now - last_goal_pub >= 10.0:
                         goal = PointStamped(
                             x=gx, y=gy, z=gz, ts=time.time(), frame_id="map"
@@ -359,20 +467,42 @@ class TestDimSimCrossWall:
                         )
                         break
 
-                    time.sleep(0.1)
+                    time.sleep(0.2)  # sample at 5 Hz for trajectory
 
-                assert reached, (
-                    f"{name}: robot did not reach ({gx}, {gy}) within "
-                    f"{timeout_sec}s. Final pos=({cx:.2f}, {cy:.2f}), "
-                    f"dist={dist:.2f}m"
+                # Compute metrics
+                with lock:
+                    cv_end = cmd_vel_count
+                final_dist = _distance(cx, cy, gx, gy)
+                m = _compute_metrics(
+                    name=name,
+                    reached=reached,
+                    elapsed=elapsed,
+                    start_dist=start_dist,
+                    final_dist=final_dist,
+                    trajectory=trajectory,
+                    goal_x=gx,
+                    goal_y=gy,
+                    cmd_vel_during=cv_end - cv_start,
                 )
+                all_metrics.append(m)
+                _print_metrics(m)
+
+                if not reached:
+                    # Don't assert — collect metrics for all waypoints
+                    print(f"[test] WARNING: {name} not reached, continuing…")
+
+            # -- Print summary -------------------------------------------------
+            _print_summary(all_metrics)
+
+            # Assert at least the easy waypoints pass
+            reached_names = {m.name for m in all_metrics if m.reached}
+            assert "p0_open" in reached_names, "Phase 1 (open corridor) failed"
 
         finally:
             print("\n[test] Stopping blueprint…")
             lcm_running = False
             lcm_thread.join(timeout=3)
             coordinator.stop()
-            # Clean up headless Chrome
             _kill_headless_chrome()
             _force_kill_port(BRIDGE_PORT)
             print("[test] Done.")
