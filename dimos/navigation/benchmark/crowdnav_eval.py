@@ -507,8 +507,8 @@ def _run_scenario(
         if success:
             break
 
-        # Real-time pacing (sleep for dt minus compute time)
-        time.sleep(max(0.0, dt * 0.5))
+        # Give planner time to process odom/costmap and produce cmd_vel
+        time.sleep(0.05)
 
     # --- Compute aggregate metrics ---
     time_to_goal = sim_time if success else scenario.time_limit
@@ -585,7 +585,7 @@ class _BenchmarkHarness(Module):
     goal_request: Out[PoseStamped]
 
     # Inputs ← connect to planner outputs
-    cmd_vel: In[Twist]
+    nav_cmd_vel: In[Twist]
     path: In[Path]
     goal_reached: In[Bool]
     navigation_state: In[String]
@@ -603,7 +603,7 @@ class _BenchmarkHarness(Module):
     @rpc
     def start(self) -> None:
         super().start()
-        self.cmd_vel.subscribe(self._on_cmd_vel)
+        self.nav_cmd_vel.subscribe(self._on_cmd_vel)
         self.path.subscribe(self._on_path)
         self.navigation_state.subscribe(self._on_nav_state)
 
