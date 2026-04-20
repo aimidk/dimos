@@ -200,12 +200,28 @@ Looks better, these are some very obvious peaks, I'm curious let's see what was 
 Let's auto-detect the peaks, extract images from those moments, and run a 2D detector
 
 ```python session=robotdata
+from dimos.mapping.voxels import VoxelMapTransformer
+from dimos.memory2.vis.space.space import Space
 from dimos.memory2.transform import peaks
 from dimos.memory2.vis.color import ColorRange
 from dimos.memory2.vis.plot.elements import VLine
 from dimos.memory2.vis.utils import mosaic
+from dimos.memory2.stream import Stream
+from itertools import chain
 
 semantic_peaks = plantness_query_cached.transform(peaks(key=lambda obs: obs.similarity, distance=1.0))
+
+# load all lidar frames captured in the readius around the semantic peaks
+# feed them into a global mapper to get a single pointcloud around our areas of interest
+global_map = semantic_peaks \
+   .map(lambda obs: store.streams.lidar.near(obs.pose_stamped, radius=0.5).first()) \
+   .transform(VoxelMapTransformer()) \
+   .last().data
+
+drawing = Space()
+drawing.add(global_map)
+drawing.add(semantic_peaks)
+drawing.to_svg("assets/plot_plantness_autopeaks_map.svg")
 
 peakColor = ColorRange("turbo")
 for i, p in enumerate(semantic_peaks):
@@ -227,6 +243,7 @@ m.data.save("assets/plants_auto.png")
 
 <!--Result:-->
 ```
+14:59:33.042 [inf][dimos/mapping/voxels.py       ] VoxelGrid using device: CUDA:0
 t=  14.1s score=0.224 prominence=0.031
 t=  26.3s score=0.225 prominence=0.033
 t=  32.7s score=0.224 prominence=0.022
@@ -244,8 +261,12 @@ t= 245.6s score=0.224 prominence=0.028
 t= 279.6s score=0.230 prominence=0.030
 ```
 
+
 ![output](assets/plot_plantness_autopeaks.svg)
+
 ![output](assets/plants_auto.png)
+
+![output](assets/plot_plantness_autopeaks_map.svg)
 
 ## Which peaks are significant?
 
@@ -256,6 +277,8 @@ We got 15 peaks back, we ran a detector on all of them so we can start projectin
 Once we put the surviving peaks on the timeline we get two very obvious plants.
 
 ```python session=robotdata
+from dimos.memory2.transform import significant
+
 plot = Plot()
 plot.add(
     plantness_similarity.transform(smooth_time(5.0)).transform(normalize()),
@@ -289,9 +312,7 @@ We'll also pull all lidar frames in their vicinity and reconstruct global maps f
 
 ```python session=robotdata
 
-from dimos.memory2.vis.space.space import Space
 from dimos.memory2.vis.space.elements import Point
-from dimos.mapping.voxels import VoxelMapTransformer
 from dimos.memory2.transform import QualityWindow
 
 drawing = Space()
@@ -329,11 +350,6 @@ drawing.to_svg("assets/peak_space.svg")
 
 m = mosaic(detections)
 m.data.save("assets/plants_peak_detections.png")
-```
-
-<!--Result:-->
-```
-14:27:41.589 [inf][dimos/mapping/voxels.py       ] VoxelGrid using device: CUDA:0
 ```
 
 ![output](assets/peak_space.svg)
