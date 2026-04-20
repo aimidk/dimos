@@ -296,31 +296,35 @@ from dimos.memory2.transform import QualityWindow
 
 drawing = Space()
 
+# TODO actual near/at filters need to accept observation streams in order to easily
+# reconstruct all frames in vicinity of another stream
+# for now, simplicity here we are focusing only on one peak.
 meaningful_peak = meaningful_peaks.first()
 
-# we load all images captured in the readius around the semantic peak
+# load all images captured in the readius around the semantic peak
 near_images = images.near(meaningful_peak.pose_stamped, radius=2.5) \
     .filter(lambda obs: obs.data.brightness > 0.1) \
     .transform(QualityWindow(lambda img: img.sharpness, window=0.5))
 
-# we load all lidar frames captured in the readius around the semantic peak
+# load all lidar frames captured in the readius around the semantic peak
 # feed them into a global mapper to get a single pointcloud around our area of interest
 global_map = store.streams.lidar.near(meaningful_peak.pose_stamped, radius=2.5) \
    .transform(VoxelMapTransformer()) \
    .last().data
 
-# here we run our global mapper only on lidar frames around the POI
+# run our global mapper only on lidar frames around the POI
 drawing.add(global_map)
 drawing.add(meaningful_peak.pose_stamped, color=color.green)
 
+# run a detector, filter small weird detections
 detections = (near_images
     .map_data(lambda obs: moondream.query_detections(obs.data, "plant"))
     .map_data(lambda obs: obs.data.filter(lambda det: det.bbox_2d_volume() > 3000))
     .filter(lambda obs: len(obs.data) > 0)
     .cache())
+    # cache this stream since we'll want to re-use it later
 
 drawing.add(detections)
-
 drawing.to_svg("assets/peak_space.svg")
 
 m = mosaic(detections)
