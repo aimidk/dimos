@@ -14,9 +14,6 @@ from dimos.memory2.vis.space.elements import Point
 
 </details>
 
-
-
-
 we init our recording, investigate available streams
 
 ```python session=mem
@@ -70,11 +67,6 @@ drawing.add(
 drawing.to_svg("assets/speed.svg")
 ```
 
-
-
-
-
-
 ![output](assets/speed.svg)
 
 we can do all kinds of things with this, for example map out room lighting
@@ -94,11 +86,6 @@ drawing.add(
 
 drawing.to_svg("assets/brightness.svg")
 ```
-
-
-
-
-
 
 ![output](assets/brightness.svg)
 
@@ -146,10 +133,6 @@ drawing.add(store.streams.color_image_embedded.search(search_vector))
 
 drawing.to_svg("assets/embedding.svg")
 ```
-
-
-
-
 
 ![output](assets/embedding.svg)
 
@@ -218,17 +201,10 @@ def plot_mosaic(frames, path, cols=5):
 
 </details>
 
-
-
-
 let's view those images
 
 ```python session=mem
 plot_mosaic(matches.map(lambda obs: obs.data).to_list(), "assets/grid.png")
 ```
-
-
-
-
 
 ![output](assets/grid.png)

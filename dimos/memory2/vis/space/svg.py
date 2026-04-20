@@ -178,9 +178,10 @@ def _render_box3d(el: Box3D, b: Bounds) -> str:
         f'stroke-width="{min(w, h) * 0.04:.4f}"/>'
     ]
     if el.label:
+        font_size = max(h * 0.3, 0.2)
         parts.append(
             f'<text x="{x:.4f}" y="{y - h * 0.05:.4f}" '
-            f'font-size="{h * 0.3:.4f}" fill="{stroke}" opacity="{alpha:.3f}">{_esc(el.label)}</text>'
+            f'font-size="{font_size:.4f}" fill="{stroke}" opacity="{alpha:.3f}">{_esc(el.label)}</text>'
         )
     return "\n".join(parts)
 

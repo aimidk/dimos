@@ -93,6 +93,21 @@ def _camera_info_static() -> CameraInfo:
     )
 
 
+# Static camera mount chain: base_link -> camera_link -> camera_optical.
+# TODO we need a standardized way to specify this for all cameras in dimos
+BASE_TO_OPTICAL: Transform = Transform(
+    translation=Vector3(0.3, 0.0, 0.0),
+    rotation=Quaternion(0.0, 0.0, 0.0, 1.0),
+    frame_id="base_link",
+    child_frame_id="camera_link",
+) + Transform(
+    translation=Vector3(0.0, 0.0, 0.0),
+    rotation=Quaternion(-0.5, 0.5, -0.5, 0.5),
+    frame_id="camera_link",
+    child_frame_id="camera_optical",
+)
+
+
 def make_connection(ip: str | None, cfg: GlobalConfig) -> Go2ConnectionProtocol:
     connection_type = cfg.unitree_connection_type
 
@@ -195,6 +210,10 @@ class GO2Connection(Module, Camera, Pointcloud):
     camera_info_static: CameraInfo = _camera_info_static()
     _camera_info_thread: Thread | None = None
     _latest_video_frame: Image | None = None
+
+    @property
+    def camera_info(self) -> Out[CameraInfo]:
+        return _camera_info_static()
 
     @classmethod
     def rerun_views(cls):  # type: ignore[no-untyped-def]
