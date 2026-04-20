@@ -66,8 +66,8 @@ from dimos.utils.logging_config import setup_logger
 
 logger = setup_logger()
 
-VOTE_WINDOW_SECONDS = 5.0
-LINEAR_SPEED = 0.3  # m/s
+VOTE_WINDOW_SECONDS = 1.0
+LINEAR_SPEED = 0.5  # m/s
 LINEAR_DURATION = 2.0  # seconds
 ANGULAR_SPEED = 0.5  # rad/s
 MIN_TURN_DEG = 5.0
