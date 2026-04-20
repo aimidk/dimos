@@ -42,6 +42,7 @@ unitree_go2_keyboard_teleop = (
                     hardware_type=HardwareType.BASE,
                     joints=_go2_joints,
                     adapter_type="unitree_go2",
+                    adapter_kwargs={"rage_mode": False},
                 ),
             ],
             tasks=[
@@ -61,7 +62,7 @@ unitree_go2_keyboard_teleop = (
             ("joint_state", JointState): LCMTransport("/coordinator/joint_state", JointState),
         }
     )
-    .global_config(obstacle_avoidance=False)
+    .global_config(obstacle_avoidance=True)
 )
 
 __all__ = ["unitree_go2_keyboard_teleop"]
