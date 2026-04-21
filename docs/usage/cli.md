@@ -99,6 +99,24 @@ dimos run unitree-go2 keyboard-teleop
 dimos run unitree-go2-agentic --disable OsmSkill WebInput
 ```
 
+#### Record/replay end-to-end test
+
+```bash
+# 1) Start a stack and record all configured output streams
+dimos --record-path /tmp/recording.db run unitree-go2
+
+# 2) Stop the run, then replay the same file
+dimos --replay-file /tmp/recording.db --viewer rerun-web run unitree-go2
+```
+
+For interactive topic selection, use `dimos recorder` instead of `--record-path`:
+
+```bash
+dimos recorder /tmp/recording.db
+```
+
+Then select streams with `space` and press `r` to start/stop recording.
+
 When `--daemon` is used, the process:
 1. Builds and starts all modules (foreground — you see errors)
 2. Runs a health check (polls worker PIDs)
@@ -329,6 +347,15 @@ It allows interactive selection of topics to record.
 ```bash
 dimos recorder [filename]
 ```
+
+Common controls:
+- `space`: select/deselect current stream
+- `r`: start/stop recording selected streams
+- `p`: play/pause recording
+- `s`: stop playback/recording
+- `[` / `]`: mark trim in/out
+- `t`: trim to marked range
+- `d`: delete marked range
 
 ### `rerun-bridge`
 
