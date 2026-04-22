@@ -42,13 +42,7 @@ jobs:
         run: |
           find .venv/lib/*/site-packages/pydrake -name '*.pyi' -delete 2>/dev/null || true
 
-      - name: Run tests
-        if: github.event_name != 'push'
-        run: |
-          /entrypoint.sh bash -c "source .venv/bin/activate && pytest --durations=0 -m 'not (tool or mujoco)'"
-
       - name: Run tests with coverage
-        if: github.event_name == 'push'
         run: |
           /entrypoint.sh bash -c "source .venv/bin/activate && _DIMOS_COV=1 coverage run -m pytest --durations=0 -m 'not (tool or mujoco)' && coverage combine && coverage xml && coverage report"
 
