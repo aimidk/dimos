@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   tests:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     timeout-minutes: 30
     runs-on: ubuntu-latest
     env:
