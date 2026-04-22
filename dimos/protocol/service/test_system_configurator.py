@@ -428,7 +428,7 @@ class TestBufferConfiguratorMacOS:
             saved = json.loads(conf.read_text())
             assert saved["kern.ipc.maxsockbuf"] == _16MiB
 
-    def test_fix_stops_at_current_value_and_saves_current(self, tmp_path) -> None:
+    def test_fix_tries_current_value_then_stops(self, tmp_path) -> None:
         conf = tmp_path / "sysctl.json"
         configurator = BufferConfiguratorMacOS()
         configurator.needs = [("kern.ipc.maxsockbuf", _64MiB, _32MiB)]
@@ -436,12 +436,14 @@ class TestBufferConfiguratorMacOS:
             patch("dimos.protocol.service.system_configurator.lcm._SYSCTL_CONF", conf),
             patch("dimos.protocol.service.system_configurator.lcm._write_sysctl_int") as mock_write,
         ):
-            # All attempts fail — should stop when halved below current (32MiB)
-            mock_write.side_effect = subprocess.CalledProcessError(1, "sysctl")
+            # 64MiB fails, 32MiB (== current) succeeds
+            mock_write.side_effect = [
+                subprocess.CalledProcessError(1, "sysctl"),
+                None,
+            ]
             configurator.fix()
-            # 64MiB fails, 32MiB == current → stops
-            assert mock_write.call_count == 1
-            # Should save current value so it doesn't re-prompt
+            assert mock_write.call_count == 2
+            mock_write.assert_called_with("kern.ipc.maxsockbuf", _32MiB)
             saved = json.loads(conf.read_text())
             assert saved["kern.ipc.maxsockbuf"] == _32MiB
 
