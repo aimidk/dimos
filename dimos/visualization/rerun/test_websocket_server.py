@@ -24,6 +24,9 @@ import threading
 import time
 from typing import Any
 
+import pytest
+import websockets.asyncio.client as ws_client
+
 from dimos.visualization.rerun.websocket_server import RerunWebSocketServer
 
 _TEST_PORT = 13031
@@ -62,8 +65,6 @@ class MockViewerPublisher:
             self._loop.close()
 
     async def _connect(self) -> Any:
-        import websockets.asyncio.client as ws_client
-
         return await ws_client.connect(self._url)
 
     def send_click(
@@ -146,8 +147,6 @@ def _wait_for_server(port: int, timeout: float = 3.0) -> None:
     """Block until the WebSocket server accepts an upgrade handshake."""
 
     async def _probe() -> None:
-        import websockets.asyncio.client as ws_client
-
         async with ws_client.connect(f"ws://127.0.0.1:{port}/ws"):
             pass
 
@@ -173,97 +172,113 @@ class TestRerunWebSocketServerStartup:
 
     def test_stop_is_idempotent(self) -> None:
         """Calling stop() twice must not raise."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
-        mod.stop()
-        mod.stop()
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
+        finally:
+            module.stop()
+        module.stop()
 
 
 class TestClickMessages:
     def test_click_publishes_point_stamped(self) -> None:
         """A single click publishes one PointStamped with correct coords."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        received: list[Any] = []
-        done = threading.Event()
-        mod.clicked_point.subscribe(_collect(received, done))
+            received: list[Any] = []
+            done = threading.Event()
+            unsub = module.clicked_point.subscribe(_collect(received, done))
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_click(1.5, 2.5, 0.0, "/world", timestamp_ms=1000)
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_click(1.5, 2.5, 0.0, "/world", timestamp_ms=1000)
+                pub.flush()
 
-        done.wait(timeout=2.0)
-        mod.stop()
+            done.wait(timeout=2.0)
+            unsub.dispose()
+        finally:
+            module.stop()
 
         assert len(received) == 1
         pt = received[0]
-        assert abs(pt.x - 1.5) < 1e-9
-        assert abs(pt.y - 2.5) < 1e-9
-        assert abs(pt.z - 0.0) < 1e-9
+        assert pt.x == pytest.approx(1.5)
+        assert pt.y == pytest.approx(2.5)
+        assert pt.z == pytest.approx(0.0)
 
     def test_click_sets_frame_id_from_entity_path(self) -> None:
         """entity_path is stored as frame_id on the published PointStamped."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        received: list[Any] = []
-        done = threading.Event()
-        mod.clicked_point.subscribe(_collect(received, done))
+            received: list[Any] = []
+            done = threading.Event()
+            unsub = module.clicked_point.subscribe(_collect(received, done))
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_click(0.0, 0.0, 0.0, "/robot/base", timestamp_ms=2000)
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_click(0.0, 0.0, 0.0, "/robot/base", timestamp_ms=2000)
+                pub.flush()
 
-        done.wait(timeout=2.0)
-        mod.stop()
-        assert received and received[0].frame_id == "/robot/base"
+            done.wait(timeout=2.0)
+            unsub.dispose()
+        finally:
+            module.stop()
+        assert received
+        assert received[0].frame_id == "/robot/base"
 
     def test_click_timestamp_converted_from_ms(self) -> None:
         """timestamp_ms is converted to seconds on PointStamped.ts."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        received: list[Any] = []
-        done = threading.Event()
-        mod.clicked_point.subscribe(_collect(received, done))
+            received: list[Any] = []
+            done = threading.Event()
+            unsub = module.clicked_point.subscribe(_collect(received, done))
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_click(0.0, 0.0, 0.0, "", timestamp_ms=5000)
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_click(0.0, 0.0, 0.0, "", timestamp_ms=5000)
+                pub.flush()
 
-        done.wait(timeout=2.0)
-        mod.stop()
-        assert received and abs(received[0].ts - 5.0) < 1e-6
+            done.wait(timeout=2.0)
+            unsub.dispose()
+        finally:
+            module.stop()
+        assert received
+        assert received[0].ts == pytest.approx(5.0)
 
     def test_multiple_clicks_all_published(self) -> None:
         """A burst of clicks all arrive on the stream."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        received: list[Any] = []
-        all_arrived = threading.Event()
+            received: list[Any] = []
+            all_arrived = threading.Event()
 
-        def _cb(pt: Any) -> None:
-            received.append(pt)
-            if len(received) >= 3:
-                all_arrived.set()
+            def _cb(pt: Any) -> None:
+                received.append(pt)
+                if len(received) >= 3:
+                    all_arrived.set()
 
-        mod.clicked_point.subscribe(_cb)
+            unsub = module.clicked_point.subscribe(_cb)
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_click(1.0, 0.0, 0.0)
-            pub.send_click(2.0, 0.0, 0.0)
-            pub.send_click(3.0, 0.0, 0.0)
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_click(1.0, 0.0, 0.0)
+                pub.send_click(2.0, 0.0, 0.0)
+                pub.send_click(3.0, 0.0, 0.0)
+                pub.flush()
 
-        all_arrived.wait(timeout=3.0)
-        mod.stop()
+            all_arrived.wait(timeout=3.0)
+            unsub.dispose()
+        finally:
+            module.stop()
 
         assert sorted(pt.x for pt in received) == [1.0, 2.0, 3.0]
 
@@ -271,160 +286,183 @@ class TestClickMessages:
 class TestNonClickMessages:
     def test_heartbeat_does_not_publish(self) -> None:
         """Heartbeat messages must not trigger a clicked_point publish."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        clicks: list[Any] = []
-        twists: list[Any] = []
-        twist_done = threading.Event()
-        mod.clicked_point.subscribe(clicks.append)
-        mod.tele_cmd_vel.subscribe(_collect(twists, twist_done))
+            clicks: list[Any] = []
+            twists: list[Any] = []
+            twist_done = threading.Event()
+            unsub_click = module.clicked_point.subscribe(clicks.append)
+            unsub_twist = module.tele_cmd_vel.subscribe(_collect(twists, twist_done))
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_heartbeat(9999)
-            # Send a canary twist so we know the server processed everything
-            pub.send_stop()
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_heartbeat(9999)
+                pub.send_stop()
+                pub.flush()
 
-        twist_done.wait(timeout=2.0)
-        mod.stop()
+            twist_done.wait(timeout=2.0)
+            unsub_click.dispose()
+            unsub_twist.dispose()
+        finally:
+            module.stop()
         assert clicks == []
 
     def test_twist_does_not_publish_clicked_point(self) -> None:
         """Twist messages must not trigger a clicked_point publish."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        clicks: list[Any] = []
-        twists: list[Any] = []
-        twist_done = threading.Event()
-        mod.clicked_point.subscribe(clicks.append)
-        mod.tele_cmd_vel.subscribe(_collect(twists, twist_done))
+            clicks: list[Any] = []
+            twists: list[Any] = []
+            twist_done = threading.Event()
+            unsub_click = module.clicked_point.subscribe(clicks.append)
+            unsub_twist = module.tele_cmd_vel.subscribe(_collect(twists, twist_done))
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_twist(0.5, 0.0, 0.0, 0.0, 0.0, 0.8)
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_twist(0.5, 0.0, 0.0, 0.0, 0.0, 0.8)
+                pub.flush()
 
-        twist_done.wait(timeout=2.0)
-        mod.stop()
+            twist_done.wait(timeout=2.0)
+            unsub_click.dispose()
+            unsub_twist.dispose()
+        finally:
+            module.stop()
         assert clicks == []
 
     def test_stop_does_not_publish_clicked_point(self) -> None:
         """Stop messages must not trigger a clicked_point publish."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        clicks: list[Any] = []
-        twists: list[Any] = []
-        twist_done = threading.Event()
-        mod.clicked_point.subscribe(clicks.append)
-        mod.tele_cmd_vel.subscribe(_collect(twists, twist_done))
+            clicks: list[Any] = []
+            twists: list[Any] = []
+            twist_done = threading.Event()
+            unsub_click = module.clicked_point.subscribe(clicks.append)
+            unsub_twist = module.tele_cmd_vel.subscribe(_collect(twists, twist_done))
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_stop()
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_stop()
+                pub.flush()
 
-        twist_done.wait(timeout=2.0)
-        mod.stop()
+            twist_done.wait(timeout=2.0)
+            unsub_click.dispose()
+            unsub_twist.dispose()
+        finally:
+            module.stop()
         assert clicks == []
 
     def test_twist_publishes_on_tele_cmd_vel(self) -> None:
         """Twist messages publish a Twist on the tele_cmd_vel stream."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        received: list[Any] = []
-        done = threading.Event()
-        mod.tele_cmd_vel.subscribe(_collect(received, done))
+            received: list[Any] = []
+            done = threading.Event()
+            unsub = module.tele_cmd_vel.subscribe(_collect(received, done))
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_twist(0.5, 0.0, 0.0, 0.0, 0.0, 0.8)
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_twist(0.5, 0.0, 0.0, 0.0, 0.0, 0.8)
+                pub.flush()
 
-        done.wait(timeout=2.0)
-        mod.stop()
+            done.wait(timeout=2.0)
+            unsub.dispose()
+        finally:
+            module.stop()
 
         assert len(received) == 1
         tw = received[0]
-        assert abs(tw.linear.x - 0.5) < 1e-9
-        assert abs(tw.angular.z - 0.8) < 1e-9
+        assert tw.linear.x == pytest.approx(0.5)
+        assert tw.angular.z == pytest.approx(0.8)
 
     def test_cmd_vel_scaling_applied_per_dimension(self) -> None:
         """cmd_vel_scaling multiplies each component independently."""
         from dimos.visualization.rerun.websocket_server import CmdVelScaling
 
-        mod = _make_module(
+        module = _make_module(
             cmd_vel_scaling=CmdVelScaling(x=0.5, y=2.0, z=0.0, roll=1.0, pitch=3.0, yaw=0.25)
         )
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        received: list[Any] = []
-        done = threading.Event()
-        mod.tele_cmd_vel.subscribe(_collect(received, done))
+            received: list[Any] = []
+            done = threading.Event()
+            unsub = module.tele_cmd_vel.subscribe(_collect(received, done))
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_twist(1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_twist(1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
+                pub.flush()
 
-        done.wait(timeout=2.0)
-        mod.stop()
+            done.wait(timeout=2.0)
+            unsub.dispose()
+        finally:
+            module.stop()
 
         assert len(received) == 1
         tw = received[0]
-        assert abs(tw.linear.x - 0.5) < 1e-9
-        assert abs(tw.linear.y - 2.0) < 1e-9
-        assert abs(tw.linear.z - 0.0) < 1e-9  # z locked out
-        assert abs(tw.angular.x - 1.0) < 1e-9  # roll
-        assert abs(tw.angular.y - 3.0) < 1e-9  # pitch
-        assert abs(tw.angular.z - 0.25) < 1e-9  # yaw
+        assert tw.linear.x == pytest.approx(0.5)
+        assert tw.linear.y == pytest.approx(2.0)
+        assert tw.linear.z == pytest.approx(0.0)
+        assert tw.angular.x == pytest.approx(1.0)
+        assert tw.angular.y == pytest.approx(3.0)
+        assert tw.angular.z == pytest.approx(0.25)
 
     def test_cmd_vel_scaling_default_is_identity(self) -> None:
         """Default CmdVelScaling() must pass twists through untouched."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        received: list[Any] = []
-        done = threading.Event()
-        mod.tele_cmd_vel.subscribe(_collect(received, done))
+            received: list[Any] = []
+            done = threading.Event()
+            unsub = module.tele_cmd_vel.subscribe(_collect(received, done))
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_twist(0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_twist(0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+                pub.flush()
 
-        done.wait(timeout=2.0)
-        mod.stop()
+            done.wait(timeout=2.0)
+            unsub.dispose()
+        finally:
+            module.stop()
 
         assert len(received) == 1
         tw = received[0]
-        assert abs(tw.linear.x - 0.3) < 1e-9
-        assert abs(tw.linear.y - 0.4) < 1e-9
-        assert abs(tw.linear.z - 0.5) < 1e-9
-        assert abs(tw.angular.x - 0.6) < 1e-9
-        assert abs(tw.angular.y - 0.7) < 1e-9
-        assert abs(tw.angular.z - 0.8) < 1e-9
+        assert tw.linear.x == pytest.approx(0.3)
+        assert tw.linear.y == pytest.approx(0.4)
+        assert tw.linear.z == pytest.approx(0.5)
+        assert tw.angular.x == pytest.approx(0.6)
+        assert tw.angular.y == pytest.approx(0.7)
+        assert tw.angular.z == pytest.approx(0.8)
 
     def test_stop_publishes_zero_twist_on_tele_cmd_vel(self) -> None:
         """Stop messages publish a zero Twist on the tele_cmd_vel stream."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        received: list[Any] = []
-        done = threading.Event()
-        mod.tele_cmd_vel.subscribe(_collect(received, done))
+            received: list[Any] = []
+            done = threading.Event()
+            unsub = module.tele_cmd_vel.subscribe(_collect(received, done))
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_stop()
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_stop()
+                pub.flush()
 
-        done.wait(timeout=2.0)
-        mod.stop()
+            done.wait(timeout=2.0)
+            unsub.dispose()
+        finally:
+            module.stop()
 
         assert len(received) == 1
         tw = received[0]
@@ -432,49 +470,51 @@ class TestNonClickMessages:
 
     def test_invalid_json_does_not_crash(self) -> None:
         """Malformed JSON is silently dropped; server stays alive."""
-        import websockets.asyncio.client as ws_client
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+            async def _send_bad() -> None:
+                async with ws_client.connect(f"ws://127.0.0.1:{_TEST_PORT}/ws") as ws:
+                    await ws.send("this is not json {{")
+                    await asyncio.sleep(0.1)
+                    await ws.send(json.dumps({"type": "heartbeat", "timestamp_ms": 0}))
+                    await asyncio.sleep(0.1)
 
-        async def _send_bad() -> None:
-            async with ws_client.connect(f"ws://127.0.0.1:{_TEST_PORT}/ws") as ws:
-                await ws.send("this is not json {{")
-                await asyncio.sleep(0.1)
-                await ws.send(json.dumps({"type": "heartbeat", "timestamp_ms": 0}))
-                await asyncio.sleep(0.1)
-
-        asyncio.run(_send_bad())
-        mod.stop()
+            asyncio.run(_send_bad())
+        finally:
+            module.stop()
 
     def test_mixed_message_sequence(self) -> None:
         """Realistic sequence: heartbeat → click → twist → stop publishes one point."""
-        mod = _make_module()
-        mod.start()
-        _wait_for_server(_TEST_PORT)
+        module = _make_module()
+        module.start()
+        try:
+            _wait_for_server(_TEST_PORT)
 
-        # Subscribe before sending so we don't race against the click dispatch.
-        received: list[Any] = []
-        done = threading.Event()
+            received: list[Any] = []
+            done = threading.Event()
 
-        def _cb(pt: Any) -> None:
-            received.append(pt)
-            done.set()
+            def _cb(pt: Any) -> None:
+                received.append(pt)
+                done.set()
 
-        mod.clicked_point.subscribe(_cb)
+            unsub = module.clicked_point.subscribe(_cb)
 
-        with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
-            pub.send_heartbeat(1000)
-            pub.send_click(7.0, 8.0, 9.0, "/map", timestamp_ms=1100)
-            pub.send_twist(0.3, 0.0, 0.0, 0.0, 0.0, 0.2)
-            pub.send_stop()
-            pub.flush()
+            with MockViewerPublisher(f"ws://127.0.0.1:{_TEST_PORT}/ws") as pub:
+                pub.send_heartbeat(1000)
+                pub.send_click(7.0, 8.0, 9.0, "/map", timestamp_ms=1100)
+                pub.send_twist(0.3, 0.0, 0.0, 0.0, 0.0, 0.2)
+                pub.send_stop()
+                pub.flush()
 
-        done.wait(timeout=2.0)
-        mod.stop()
+            done.wait(timeout=2.0)
+            unsub.dispose()
+        finally:
+            module.stop()
 
         assert len(received) == 1
-        assert abs(received[0].x - 7.0) < 1e-9
-        assert abs(received[0].y - 8.0) < 1e-9
-        assert abs(received[0].z - 9.0) < 1e-9
+        assert received[0].x == pytest.approx(7.0)
+        assert received[0].y == pytest.approx(8.0)
+        assert received[0].z == pytest.approx(9.0)
