@@ -186,3 +186,21 @@
   problem: "This is a very bad Claude pattern: with ... X ... __init__: X.__new__"
   solution: "The patch.object + __new__ pattern bypasses the full Module init to avoid needing real streams/rpc. It's ugly but functional for unit testing internal logic. A cleaner approach would be to extract the muxing logic into a testable class that doesn't inherit from Module, but that's a larger refactor. Acknowledged as tech debt."
   commit: null
+
+- pr: 1784
+  comment_id: 3120880870
+  author: paul-nechifor
+  file: dimos/visualization/rerun/websocket_server.py
+  line: 191
+  problem: "Please instruct claude to move imports to the top."
+  solution: "Moved socket, get_local_ips, and RERUN_GRPC_PORT imports from inline in _log_connect_hints to the top-level imports section."
+  commit: b3972c1b4
+
+- pr: 1784
+  comment_id: null
+  author: CI
+  file: dimos/visualization/rerun/test_viewer_ws_e2e.py
+  line: 287
+  problem: "CI failure: test_viewer_ws_client_connects runs when it shouldn't because skipif checks for --connect (present in stock Rerun) instead of --ws-url (only in custom dimos-viewer)."
+  solution: "Changed skipif to check for --ws-url flag so the test is properly skipped when the custom viewer binary is not installed."
+  commit: b3972c1b4
