@@ -198,7 +198,7 @@ class TestClickMessages:
                 pub.flush()
 
             done.wait(timeout=2.0)
-            unsub.dispose()
+            unsub()
         finally:
             module.stop()
 
@@ -224,7 +224,7 @@ class TestClickMessages:
                 pub.flush()
 
             done.wait(timeout=2.0)
-            unsub.dispose()
+            unsub()
         finally:
             module.stop()
         assert received
@@ -246,7 +246,7 @@ class TestClickMessages:
                 pub.flush()
 
             done.wait(timeout=2.0)
-            unsub.dispose()
+            unsub()
         finally:
             module.stop()
         assert received
@@ -276,7 +276,7 @@ class TestClickMessages:
                 pub.flush()
 
             all_arrived.wait(timeout=3.0)
-            unsub.dispose()
+            unsub()
         finally:
             module.stop()
 
@@ -303,8 +303,8 @@ class TestNonClickMessages:
                 pub.flush()
 
             twist_done.wait(timeout=2.0)
-            unsub_click.dispose()
-            unsub_twist.dispose()
+            unsub_click()
+            unsub_twist()
         finally:
             module.stop()
         assert clicks == []
@@ -327,8 +327,8 @@ class TestNonClickMessages:
                 pub.flush()
 
             twist_done.wait(timeout=2.0)
-            unsub_click.dispose()
-            unsub_twist.dispose()
+            unsub_click()
+            unsub_twist()
         finally:
             module.stop()
         assert clicks == []
@@ -351,8 +351,8 @@ class TestNonClickMessages:
                 pub.flush()
 
             twist_done.wait(timeout=2.0)
-            unsub_click.dispose()
-            unsub_twist.dispose()
+            unsub_click()
+            unsub_twist()
         finally:
             module.stop()
         assert clicks == []
@@ -373,7 +373,7 @@ class TestNonClickMessages:
                 pub.flush()
 
             done.wait(timeout=2.0)
-            unsub.dispose()
+            unsub()
         finally:
             module.stop()
 
@@ -402,7 +402,7 @@ class TestNonClickMessages:
                 pub.flush()
 
             done.wait(timeout=2.0)
-            unsub.dispose()
+            unsub()
         finally:
             module.stop()
 
@@ -431,7 +431,7 @@ class TestNonClickMessages:
                 pub.flush()
 
             done.wait(timeout=2.0)
-            unsub.dispose()
+            unsub()
         finally:
             module.stop()
 
@@ -460,7 +460,7 @@ class TestNonClickMessages:
                 pub.flush()
 
             done.wait(timeout=2.0)
-            unsub.dispose()
+            unsub()
         finally:
             module.stop()
 
@@ -510,7 +510,7 @@ class TestNonClickMessages:
                 pub.flush()
 
             done.wait(timeout=2.0)
-            unsub.dispose()
+            unsub()
         finally:
             module.stop()
 

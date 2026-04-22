@@ -113,7 +113,7 @@ class TestViewerProtocolE2E:
             )
 
             done.wait(timeout=3.0)
-            unsub.dispose()
+            unsub()
         finally:
             server.stop()
 
@@ -149,7 +149,7 @@ class TestViewerProtocolE2E:
                     }
                 ],
             )
-            unsub.dispose()
+            unsub()
         finally:
             server.stop()
         assert received == []
@@ -165,7 +165,7 @@ class TestViewerProtocolE2E:
             unsub = server.clicked_point.subscribe(received.append)
 
             _send_messages(_E2E_PORT, [{"type": "stop"}])
-            unsub.dispose()
+            unsub()
         finally:
             server.stop()
         assert received == []
@@ -215,7 +215,7 @@ class TestViewerProtocolE2E:
             )
 
             done.wait(timeout=3.0)
-            unsub.dispose()
+            unsub()
         finally:
             server.stop()
 
@@ -271,7 +271,7 @@ class TestViewerProtocolE2E:
             )
 
             all_done.wait(timeout=5.0)
-            unsub.dispose()
+            unsub()
         finally:
             server.stop()
 
@@ -324,7 +324,7 @@ class TestViewerBinaryConnectMode:
                     break
                 time.sleep(0.1)
 
-            unsub.dispose()
+            unsub()
         finally:
             if proc is not None:
                 proc.terminate()
