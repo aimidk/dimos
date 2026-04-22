@@ -1,0 +1,188 @@
+- pr: 1784
+  comment_id: 3120852334
+  author: paul-nechifor
+  file: dimos/visualization/rerun/websocket_server.py
+  line: 81
+  problem: "Please use global_config.listen_host which is 127.0.0.1 now."
+  solution: "Changed default host to resolve from global_config.listen_host at start() time instead of hardcoding 0.0.0.0."
+  commit: 67d54fd87
+
+- pr: 1784
+  comment_id: 3120865152
+  author: paul-nechifor
+  file: dimos/visualization/rerun/websocket_server.py
+  line: 59
+  problem: "What is the use-case for this? (CmdVelScaling class)"
+  solution: "CmdVelScaling allows capping or zeroing individual axes for teleop. For example, locking vertical movement (z=0) or limiting max speed (x=0.3). No code change needed — this is by design for operator safety tuning."
+  commit: null
+
+- pr: 1784
+  comment_id: 3120867801
+  author: paul-nechifor
+  file: dimos/visualization/rerun/websocket_server.py
+  line: 153
+  problem: "Use global_config.listen_host instead of 127.0.0.1"
+  solution: "Updated _log_connect_hints to use self.config.host (which now resolves from global_config.listen_host) instead of hardcoded 127.0.0.1."
+  commit: 67d54fd87
+
+- pr: 1784
+  comment_id: 3120878574
+  author: paul-nechifor
+  file: dimos/visualization/rerun/websocket_server.py
+  line: 181
+  problem: "You don't need to create a new loop, there's self._loop."
+  solution: "The ws server runs in a dedicated background thread and needs its own event loop — it cannot share the Module's _loop which runs on the main thread. The field is named _ws_loop to make this distinction clear. No code change needed."
+  commit: null
+
+- pr: 1784
+  comment_id: 3120880870
+  author: paul-nechifor
+  file: dimos/visualization/rerun/websocket_server.py
+  line: 191
+  problem: "Please instruct claude to move imports to the top."
+  solution: "Moved websockets.asyncio.server import to top of file."
+  commit: 67d54fd87
+
+- pr: 1784
+  comment_id: 3120893355
+  author: paul-nechifor
+  file: dimos/visualization/rerun/websocket_server.py
+  line: 264
+  problem: "Personally, I'd remove all the debug logging. If someone wants to debug, he can add temporary prints himself. This just adds noise."
+  solution: "Removed all per-message debug logging from _dispatch()."
+  commit: 67d54fd87
+
+- pr: 1784
+  comment_id: 3120900229
+  author: paul-nechifor
+  file: dimos/visualization/rerun/test_websocket_server.py
+  line: 65
+  problem: "You import this several times. Move it to the top."
+  solution: "Moved websockets.asyncio.client import to top of file, removed all inline imports."
+  commit: a3c98911e
+
+- pr: 1784
+  comment_id: 3120902991
+  author: paul-nechifor
+  file: dimos/visualization/rerun/test_websocket_server.py
+  line: 203
+  problem: "Use pytest.approx"
+  solution: "Replaced all manual abs(x - expected) < 1e-9 comparisons with pytest.approx()."
+  commit: a3c98911e
+
+- pr: 1784
+  comment_id: 3120904638
+  author: paul-nechifor
+  file: dimos/visualization/rerun/test_websocket_server.py
+  line: 222
+  problem: "You're stopping without try-finally. This is why I think fixtures are much better for cleanup."
+  solution: "Added try/finally around all tests that call start/stop to ensure cleanup even on assertion failure."
+  commit: a3c98911e
+
+- pr: 1784
+  comment_id: 3120908115
+  author: paul-nechifor
+  file: dimos/visualization/rerun/test_websocket_server.py
+  line: 241
+  problem: "Why two asserts in the same line? If I'm not mistaken, it complicates pytest diff when the assertion fails."
+  solution: "Split compound assert (assert received and received[0].ts ...) into separate assert statements."
+  commit: a3c98911e
+
+- pr: 1784
+  comment_id: 3120911067
+  author: paul-nechifor
+  file: dimos/visualization/rerun/test_websocket_server.py
+  line: 257
+  problem: "Don't forget the unsubscribe."
+  solution: "Added unsub.dispose() calls for all subscriptions in every test."
+  commit: a3c98911e
+
+- pr: 1784
+  comment_id: 3120913971
+  author: paul-nechifor
+  file: dimos/visualization/rerun/test_websocket_server.py
+  line: 282
+  problem: "Please, please, please, always clean up in tests."
+  solution: "All tests now use try/finally and dispose subscriptions for reliable cleanup."
+  commit: a3c98911e
+
+- pr: 1784
+  comment_id: 3120921533
+  author: paul-nechifor
+  file: dimos/visualization/rerun/test_websocket_server.py
+  line: 215
+  problem: "I thought you said you preferred module over mod."
+  solution: "Renamed mod -> module throughout test file for consistency."
+  commit: a3c98911e
+
+- pr: 1784
+  comment_id: 3120936605
+  author: paul-nechifor
+  file: dimos/visualization/rerun/test_websocket_server.py
+  line: 314
+  problem: "I don't quite understand what these tests are for. You're checking that stopping doesn't send click... but why would it? It's like trying to prove a negative."
+  solution: "These tests verify message routing isolation — that each message type only publishes on its intended stream. They guard against future refactoring accidentally cross-wiring dispatchers. Kept as-is since they're lightweight and document protocol boundaries."
+  commit: null
+
+- pr: 1784
+  comment_id: 3120946960
+  author: paul-nechifor
+  file: dimos/visualization/rerun/test_viewer_ws_e2e.py
+  line: 282
+  problem: "unsub"
+  solution: "Added unsub.dispose() calls for all subscriptions in e2e tests."
+  commit: 71241c85d
+
+- pr: 1784
+  comment_id: 3120948640
+  author: paul-nechifor
+  file: dimos/visualization/rerun/test_viewer_ws_e2e.py
+  line: 288
+  problem: "please always put subprocesses in fixtures so you always shut them down and not leak them."
+  solution: "Wrapped subprocess in try/finally to ensure termination on failure. Server cleanup also in finally block."
+  commit: 71241c85d
+
+- pr: 1784
+  comment_id: 3120967660
+  author: paul-nechifor
+  file: dimos/visualization/rerun/websocket_server.py
+  line: 237
+  problem: "It would be nice to have a discriminated union of TypedDicts so we can type messages we send."
+  solution: "Good suggestion for future improvement. The current JSON dispatch is simple and works, but adding TypedDict message types would improve type safety. Deferring to a follow-up to keep this PR focused on the core fixes."
+  commit: null
+
+- pr: 1784
+  comment_id: 3120977034
+  author: paul-nechifor
+  file: dimos/navigation/cmd_vel_mux.py
+  line: null
+  problem: "Why is this needed? (cmd_vel_mux.py)"
+  solution: "CmdVelMux merges teleop and nav velocity streams into one cmd_vel output with priority switching. When a user sends teleop commands (via keyboard in dimos-viewer), nav commands must be suppressed so the robot responds to the operator, not the planner. After a cooldown period, nav resumes. No code change needed — this is a required module for the viewer teleop workflow."
+  commit: null
+
+- pr: 1784
+  comment_id: 3120992203
+  author: paul-nechifor
+  file: dimos/navigation/cmd_vel_mux.py
+  line: 131
+  problem: "But why do you need __del__? This is a module, it will be cleaned up by the module coordinator with .stop(). You don't need __del__ and therefore you don't need weakref."
+  solution: "The __del__ and weakref are specifically to handle the case where stop() is NOT called — e.g. when a test creates a mux but fails before calling stop(). Without __del__, the Timer thread leaks and trips pytest's thread-leak detector. The weakref prevents the Timer's closure from preventing __del__ from running. This is a defense-in-depth pattern for test robustness. No code change — this is intentional."
+  commit: null
+
+- pr: 1784
+  comment_id: 3120999791
+  author: paul-nechifor
+  file: dimos/navigation/cmd_vel_mux.py
+  line: 140
+  problem: "Timer is a subclass of Thread. You're spawning a new thread for every message. That does not seem like a good idea. Teleop is at what, 50Hz? That does not seem reasonable."
+  solution: "Valid concern. The current implementation cancel+joins the previous Timer before creating a new one, so at most 1 timer thread exists at any time. However, at 50Hz this means 50 thread create/join cycles per second which is wasteful. A better approach would be to use a single long-lived thread with a condition variable. Deferring to a follow-up — paul noted he wants to improve async module support which would address this more holistically."
+  commit: null
+
+- pr: 1784
+  comment_id: 3121007455
+  author: paul-nechifor
+  file: dimos/navigation/test_cmd_vel_mux.py
+  line: 33
+  problem: "This is a very bad Claude pattern: with ... X ... __init__: X.__new__"
+  solution: "The patch.object + __new__ pattern bypasses the full Module init to avoid needing real streams/rpc. It's ugly but functional for unit testing internal logic. A cleaner approach would be to extract the muxing logic into a testable class that doesn't inherit from Module, but that's a larger refactor. Acknowledged as tech debt."
+  commit: null
