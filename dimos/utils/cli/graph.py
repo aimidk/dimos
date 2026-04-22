@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import html as html_mod
 import importlib.util
 import os
 import shutil
@@ -103,7 +104,10 @@ def _build_html(python_file: str, *, show_disconnected: bool = True) -> str:
         per_bp_disconnected.append(disconnected)
 
         active_cls = " active" if idx == 0 else ""
-        tab_buttons.append(f'<button class="tab-btn{active_cls}" data-idx="{idx}">{name}</button>')
+        escaped_name = html_mod.escape(name)
+        tab_buttons.append(
+            f'<button class="tab-btn{active_cls}" data-idx="{idx}">{escaped_name}</button>'
+        )
         tab_panels.append(
             f'<div class="tab-panel{active_cls}" data-idx="{idx}">'
             f'<div class="viewport"><div class="canvas">'
@@ -379,8 +383,6 @@ def _build_html_graphviz(python_file: str, *, show_disconnected: bool = True) ->
             "                  apt install graphviz    (Debian/Ubuntu)"
         )
 
-    import html
-
     sections = []
     for name, bp in blueprints:
         fd, svg_path = tempfile.mkstemp(suffix=".svg", prefix=f"dimos_{name}_")
@@ -391,7 +393,7 @@ def _build_html_graphviz(python_file: str, *, show_disconnected: bool = True) ->
                 svg_content = f.read()
         finally:
             os.unlink(svg_path)
-        escaped_name = html.escape(name)
+        escaped_name = html_mod.escape(name)
         sections.append(f'<h2>{escaped_name}</h2>\n<div class="diagram">{svg_content}</div>')
 
     return f"""\
