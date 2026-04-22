@@ -102,6 +102,7 @@ all_blueprints = {
 
 
 all_modules = {
+    "arduino-twist-echo": "dimos.hardware.arduino.examples.arduino_twist_echo.module.TwistEcho",
     "arm-teleop-module": "dimos.teleop.quest.quest_extensions.ArmTeleopModule",
     "b-box-navigation-module": "dimos.navigation.bbox_navigation.BBoxNavigationModule",
     "b1-connection-module": "dimos.robot.unitree.b1.connection.B1ConnectionModule",
@@ -168,7 +169,6 @@ all_modules = {
     "spatial-memory": "dimos.perception.spatial_perception.SpatialMemory",
     "speak-skill": "dimos.agents.skills.speak_skill.SpeakSkill",
     "temporal-memory": "dimos.perception.experimental.temporal_memory.temporal_memory.TemporalMemory",
-    "twist-echo": "dimos.hardware.arduino.examples.arduino_twist_echo.module.TwistEcho",
     "twist-teleop-module": "dimos.teleop.quest.quest_extensions.TwistTeleopModule",
     "unitree-g1-skill-container": "dimos.robot.unitree.g1.skill_container.UnitreeG1SkillContainer",
     "unitree-skill-container": "dimos.robot.unitree.unitree_skill_container.UnitreeSkillContainer",
