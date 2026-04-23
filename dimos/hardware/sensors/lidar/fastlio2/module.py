@@ -222,6 +222,10 @@ class FastLio2(NativeModule, perception.Lidar, perception.Odometry, mapping.Glob
         # pose update into the TF tree as an odom→body transform.
         self.odometry.transport.subscribe(self._on_odom_for_tf, self.odometry)
 
+    @rpc
+    def stop(self) -> None:
+        super().stop()
+
     def _on_odom_for_tf(self, msg: Odometry) -> None:
         """Publish the SLAM pose as an ``odom → body`` TF transform."""
         self.tf.publish(
