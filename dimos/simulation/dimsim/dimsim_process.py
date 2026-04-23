@@ -51,6 +51,7 @@ class DimSimProcess:
         port = self.global_config.dimsim_port
 
         _ensure_scene(base_cmd, scene)
+        _ensure_playwright_chromium(deno_path)
         _kill_port_holder(port)
 
         render = os.environ.get("DIMSIM_RENDER", "gpu").strip()
@@ -152,6 +153,13 @@ def _deno_cmd(deno_path: str, repo_dir: Path) -> list[str]:
 def _ensure_scene(base_cmd: list[str], scene: str) -> None:
     subprocess.run([*base_cmd, "setup"], check=True)
     subprocess.run([*base_cmd, "scene", "install", scene], check=True)
+
+
+def _ensure_playwright_chromium(deno_path: str) -> None:
+    subprocess.run(
+        [deno_path, "run", "--allow-all", "npm:playwright@1.58.2", "install", "chromium"],
+        check=True,
+    )
 
 
 def _deno_triple() -> str:
