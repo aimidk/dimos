@@ -134,3 +134,90 @@
     proper TF transforms. No code change made — related to the broader TF
     refactor discussion.
   commit: null
+
+- pr: 1791
+  comment_id: 3098196509
+  author: leshy
+  file: dimos/msgs/geometry_msgs/Point32.py
+  line: 23
+  problem: "I don't mind being able to debug FAR planner? I'd push the other direction and add to_rerun for Polygon etc"
+  solution: >
+    Leshy prefers keeping FAR planner visualization types and adding to_rerun
+    methods for Polygon etc. Jeff originally planned to remove them but leshy
+    wants them kept. No code change — Jeff should add to_rerun methods instead
+    of removing the types.
+  commit: null
+
+- pr: 1791
+  comment_id: 3098291978
+  author: leshy
+  file: dimos/hardware/sensors/lidar/fastlio2/cpp/main.cpp
+  line: 68
+  problem: "you can move things using TF, emitting one message world -> whatever_your_frame would peg your frame to the ground"
+  solution: >
+    Follow-up to the TF discussion. Leshy explains how to use TF to achieve
+    the same ground-pinning effect without manual coordinate transforms.
+    Jeff should implement this approach. No code change — design guidance.
+  commit: null
+
+- pr: 1791
+  comment_id: 3114897517
+  author: leshy
+  file: dimos/navigation/smart_nav/modules/path_follower/path_follower.py
+  line: null
+  problem: "pure pursuit unsuitable for holonomic robots"
+  solution: >
+    Leshy notes that pure pursuit controllers are designed for car-like
+    (non-holonomic) robots and may not be ideal for the Go2 which is
+    holonomic. Design consideration for future improvement.
+  commit: null
+
+- pr: 1791
+  comment_id: 3114900310
+  author: leshy
+  file: dimos/navigation/smart_nav/modules/movement_manager/movement_manager.py
+  line: null
+  problem: "Why DIY TF cache instead of self.tf.get?"
+  solution: >
+    Leshy questions why the movement manager maintains its own TF cache
+    instead of using the built-in self.tf.get() API. Jeff should evaluate
+    whether the custom cache is necessary or if the standard TF API suffices.
+    No code change — design question.
+  commit: null
+
+- pr: 1791
+  comment_id: 3114904926
+  author: leshy
+  file: dimos/navigation/loop_closure/pgo.py
+  line: null
+  problem: "Why DIY Python PGO instead of fastlio PGO?"
+  solution: >
+    Leshy questions the need for a separate Python PGO implementation when
+    fastlio already has PGO capabilities. Jeff should evaluate whether the
+    Python PGO offers benefits (e.g., tighter integration, easier debugging)
+    over using fastlio's built-in PGO. No code change — architecture question.
+  commit: null
+
+- pr: 1791
+  comment_id: 3114920804
+  author: leshy
+  file: dimos/msgs/nav_msgs/GraphNodes3D.py
+  line: null
+  problem: "suggests adding diff renderer to Path's to_rerun"
+  solution: >
+    Leshy suggests adding a diff-based renderer to the Path message type's
+    to_rerun method for better visualization. Enhancement suggestion for
+    future work. No code change.
+  commit: null
+
+- pr: 1791
+  comment_id: 4265816310
+  author: leshy
+  file: null
+  line: null
+  problem: "CMUNav? ProfYangNav? this nav stack does have an actual name afaik, don't name it NavCore"
+  solution: >
+    Follow-up on naming discussion. Leshy suggests using the actual academic
+    name for the nav stack rather than a generic name like NavCore. Discussion
+    ongoing — no rename implemented pending team consensus.
+  commit: null
