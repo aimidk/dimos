@@ -2,6 +2,10 @@
 
 A framework for building and deploying robotic systems with
 dimensional awareness and modular agent-based architectures.
+
+Fork notes:
+    Forked for personal learning and experimentation with agent architectures.
+    Upstream: https://github.com/dimensionalOS/dimos
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -13,9 +17,11 @@ except PackageNotFoundError:
 
 __author__ = "dimos contributors"
 __license__ = "Apache-2.0"
+__upstream__ = "https://github.com/dimensionalOS/dimos"
 
 __all__ = [
     "__version__",
     "__author__",
     "__license__",
+    "__upstream__",
 ]
