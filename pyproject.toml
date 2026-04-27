@@ -93,7 +93,8 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 # removed --cov-report=xml since I'm only running tests locally
 # added -x to stop on first failure so I don't have to scroll through a wall of errors
-addopts = "--cov=dimos --cov-report=term-missing -x"
+# removed -x locally when I want a full test run: just comment it out below
+addopts = "--cov=dimos --cov-report=term-missing -x -q"
 
 [tool.coverage.run]
 source = ["src/dimos"]
