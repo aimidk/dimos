@@ -92,7 +92,8 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 # removed --cov-report=xml since I'm only running tests locally
-addopts = "--cov=dimos --cov-report=term-missing"
+# added -x to stop on first failure so I don't have to scroll through a wall of errors
+addopts = "--cov=dimos --cov-report=term-missing -x"
 
 [tool.coverage.run]
 source = ["src/dimos"]
